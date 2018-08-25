@@ -61,6 +61,8 @@ import java.net.SocketTimeoutException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import javax.annotation.Nullable;
 
 /**
@@ -296,6 +298,7 @@ public class DatasetServiceClient {
     HttpRequest request = addUserIdHeader(requestBuilder).build();
     try {
       LOG.trace("Executing {} {}", request.getMethod(), request.getURL().getPath());
+      logDatasetServiceExecutors();
       HttpResponse response = remoteClient.execute(request);
       LOG.trace("Executed {} {}", request.getMethod(), request.getURL().getPath());
       return response;
@@ -313,6 +316,22 @@ public class DatasetServiceClient {
     } catch (Throwable e) { // anything unexpected
       LOG.trace("Caught exception for {} {}", request.getMethod(), request.getURL().getPath(), e);
       throw e;
+    }
+  }
+
+  private static final String DSS_EXEC_PREFIX = "dataset.service-executor-";
+  private static void logDatasetServiceExecutors() {
+    if (LOG.isTraceEnabled()) {
+      SortedMap<Integer, String> threadSet = new TreeMap<>();
+      Map<Thread, StackTraceElement[]> stackTraces = Thread.getAllStackTraces();
+      for (Map.Entry<Thread, StackTraceElement[]> entry : stackTraces.entrySet()) {
+        String threadName = entry.getKey().getName();
+        if (threadName.startsWith(DSS_EXEC_PREFIX)) {
+          int threadNum = Integer.parseInt(threadName.substring(DSS_EXEC_PREFIX.length()));
+          threadSet.put(threadNum, entry.getKey().getState().toString());
+        }
+      }
+      LOG.trace("Current dataset service threads are {}: {}", threadSet.size(), threadSet);
     }
   }
 
