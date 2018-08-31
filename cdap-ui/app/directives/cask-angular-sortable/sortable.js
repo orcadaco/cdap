@@ -87,12 +87,12 @@ function caskSortableDirective ($log, $stateParams, $state) {
         var th = angular.element(this),
             predicate = getPredicate(th);
 
-        if (th.attr('skip-sort')){
+        if (th.attr('skip-sort')) {
           return;
         }
 
         scope.$apply(function() {
-          if (scope.sortable.predicate === predicate){
+          if (scope.sortable.predicate === predicate) {
             scope.sortable.reverse = !scope.sortable.reverse;
             th.find('i').toggleClass('fa-flip-vertical');
           }
