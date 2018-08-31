@@ -20,6 +20,7 @@ angular.module(PKG.name + '.feature.hydrator')
     vm.$interval = $interval;
     vm.moment = moment;
     vm.pipelineList = [];
+    vm.currentVisiblePipelines = [];
     vm.pipelineListLoaded = false;
     vm.MyPipelineStatusMapper = MyPipelineStatusMapper;
     var eventEmitter = window.CaskCommon.ee(window.CaskCommon.ee);
@@ -27,9 +28,8 @@ angular.module(PKG.name + '.feature.hydrator')
       running: 0,
       draft: 0
     };
+    vm.PAGE_SIZE = 10;
     vm.GLOBALS = GLOBALS;
-    var realtime = [],
-        batch = [];
     var statusMap = {};
     getPipelines();
 
@@ -63,6 +63,7 @@ angular.module(PKG.name + '.feature.hydrator')
       $stateParams.page = vm.currentPage;
       vm.pipelineListLoaded = true;
       $state.go('hydrator.list', $stateParams, {notify: false});
+      vm.fetchPipelinesRunsInfo();
     };
 
     vm.deleteDraft = function(draftId) {
@@ -142,47 +143,29 @@ angular.module(PKG.name + '.feature.hydrator')
       var params = {
         namespace: $state.params.namespace,
         appId: app.name,
-        scope: $scope
+        scope: $scope,
+        limit: 1
       };
 
       var api;
 
       if (app.artifact.name === GLOBALS.etlBatch || app.artifact.name === GLOBALS.etlDataPipeline) {
         api = myWorkFlowApi;
-
         var workflowId = app.artifact.name === GLOBALS.etlDataPipeline ? 'DataPipelineWorkflow' : 'ETLWorkflow';
         params.workflowId = workflowId;
-
-        batch.push({
-          appId: app.name,
-          programType: 'Workflow',
-          programId: workflowId
-        });
       } else if (app.artifact.name === GLOBALS.etlDataStreams) {
         api = mySparkApi;
         params.sparkId = 'DataStreamsSparkStreaming';
-        realtime.push({
-          appId: app.name,
-          programType: 'Spark',
-          programId: 'DataStreamsSparkStreaming'
-        });
 
       } else {
         api = myWorkersApi;
         params.workerId = 'ETLWorker';
-
-        realtime.push({
-          appId: app.name,
-          programType: 'Worker',
-          programId: 'ETLWorker'
-        });
       }
 
       api.runs(params)
         .$promise
         .then(function (runs) {
           if (runs.length) {
-            app._stats.numRuns = runs.length;
             app._stats.lastStartTime = runs.length > 0 ? runs[0].starting : 'N/A';
             var currentRun = runs[0];
             setDuration(app, currentRun);
@@ -192,7 +175,6 @@ angular.module(PKG.name + '.feature.hydrator')
               vm.statusCount.running += 1;
             }
           } else {
-            app._stats.numRuns = 0;
             statusMap[app.name] = vm.MyPipelineStatusMapper.lookupDisplayStatus('SUSPENDED');
           }
           updateStatusAppObject();
@@ -207,20 +189,62 @@ angular.module(PKG.name + '.feature.hydrator')
         .then(function success(res) {
           vm.pipelineList = res;
 
-          fetchDrafts().then(setCurrentPage);
-
-          angular.forEach(vm.pipelineList, function (app) {
-            app._stats = {};
-            fetchRunsInfo(app);
-          });
-          fetchWorkflowNextRunTimes();
+          fetchDrafts()
+            .then(setCurrentPage);
         });
     }
 
+    vm.fetchPipelinesRunsInfo = () => {
+      vm.currentVisiblePipelines = vm.pipelineList.slice(
+        (vm.currentPage - 1) * vm.PAGE_SIZE,
+        ((vm.currentPage - 1) * vm.PAGE_SIZE) + 10
+      );
+      angular.forEach(vm.currentVisiblePipelines, function (app) {
+        app._stats = {};
+        fetchRunsInfo(app);
+      });
+      vm.fetchRunsCount(vm.currentVisiblePipelines);
+      fetchWorkflowNextRunTimes();
+    };
+
+    vm.fetchRunsCount = (pipelinesList) => {
+      let runsRequestBody = pipelinesList.map(pipeline => {
+        return {
+          appId: pipeline.name,
+          programType: 'Workflow',
+          programId: 'DataPipelineWorkflow'
+        };
+      });
+      myPipelineApi.getRunsCount({
+        namespace: $stateParams.namespace
+      }, runsRequestBody)
+        .$promise
+        .then((runsCountList) => {
+          vm.currentVisiblePipelines = vm.currentVisiblePipelines.map(pipeline => {
+            let runsCountObj = _.find(runsCountList, { appId: pipeline.name});
+            let numRuns = '--';
+            if (typeof runsCountObj !== 'undefined') {
+              numRuns = runsCountObj.runCount;
+            }
+            let newPipelineObj = pipeline;
+            newPipelineObj._stats.numRuns = numRuns;
+            return newPipelineObj;
+          });
+        });
+    };
     /**
      * Gets the next workflow run times. This must be called after batch objects have been created.
      */
     function fetchWorkflowNextRunTimes() {
+      let batch = [];
+      batch = vm.currentVisiblePipelines.map(pipeline => {
+        var workflowId = pipeline.artifact.name === GLOBALS.etlDataPipeline ? 'DataPipelineWorkflow' : 'ETLWorkflow';
+         return {
+          appId: pipeline.name,
+          programType: 'Workflow',
+          programId: workflowId
+        };
+      });
       batch.forEach(function (batchParams) {
         myPipelineCommonApi.nextRunTime({
           namespace: $stateParams.namespace,
@@ -232,7 +256,7 @@ angular.module(PKG.name + '.feature.hydrator')
           .$promise
           .then(function (res) {
           if (res && res.length) {
-            vm.pipelineList.forEach(function (app) {
+            vm.currentVisiblePipelines.forEach(function (app) {
               if (app.name === batchParams.appId) {
                 app._stats.nextRun = res[0].time;
               }
