@@ -916,6 +916,48 @@ public class DefaultStore implements Store {
   }
 
   /**
+   * Method to add old run count info
+   *
+   * @param maxRows max batch size to fetch
+   */
+  public void upgrade(int maxRows) {
+    // If upgrade is already complete, then simply return.
+    if (isUpgradeComplete()) {
+      LOG.info("Run count is already upgraded.");
+      return;
+    }
+
+    boolean computeComplete = Transactionals.execute(transactional, context -> {
+      AppMetadataStore store = getAppMetadataStore(context);
+
+      // create the start time if not exist, any run record older than this time will need to be counted
+      store.createStartTimeIfNotExist();
+      return store.computeOldRunCount(maxRows);
+    });
+
+    // merge the result
+    if (computeComplete) {
+      Transactionals.execute(transactional, context -> {
+        AppMetadataStore store = getAppMetadataStore(context);
+        boolean upgradeComplete = store.mergeCountResult(maxRows);
+        if (upgradeComplete) {
+          store.deleteStartUpTimeRow();
+          store.upgradeCompleted();
+        }
+      });
+    }
+  }
+
+  // Returns true if the upgrade flag is set. Upgrade could have completed earlier than this since this flag is
+  // updated asynchronously.
+  public boolean isUpgradeComplete() {
+    return Transactionals.execute(transactional, context -> {
+      // The create call will update the upgradeComplete flag
+      return AppMetadataStore.create(configuration, context, dsFramework).hasUpgraded();
+    });
+  }
+
+  /**
    * Returns the {@link ProgramSpecification} for the specified {@link ProgramId program}.
    * @param appSpec the {@link ApplicationSpecification} of the existing application
    * @param programId the {@link ProgramId program} for which the {@link ProgramSpecification} is requested
