@@ -25,7 +25,7 @@ $container_border_color: lightgray;
     &.rv-discrete-color-legend.horizontal {
       .rv-discrete-color-legend-item {
         display: inline-block;
-        margin: 0 20px;
+        margin: 0 10px;
         .rv-discrete-color-legend-item__color {
           display: inline-block;
           width: 10px;
@@ -56,7 +56,7 @@ $container_border_color: lightgray;
   }
   .x-axis-title {
     position: absolute;
-    bottom: -20px;
+    bottom: -5px;
     right: 0;
   }
   .y-axis-title {
