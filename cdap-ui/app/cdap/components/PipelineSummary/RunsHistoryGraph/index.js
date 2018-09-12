@@ -46,7 +46,8 @@ require('react-vis/dist/styles/plot.scss');
 const MARKSERIESSTROKECOLOR = colorVariables.grey03;
 const FAILEDRUNCOLOR = colorVariables.red01;
 const SUCCESSRUNCOLOR = colorVariables.green02;
-const PENDINGSTATUSCOLOR = colorVariables.grey03;
+const PENDINGSTATUSFILLCOLOR = 'transparent';
+const PENDINGSTATUSSTROKECOLOR = colorVariables.blue02;
 const RUNNINGSTATUSCOLOR = colorVariables.blue02;
 const LINECOLOR = colorVariables.grey06;
 const PREFIX = `features.PipelineSummary.runsHistoryGraph`;
@@ -62,7 +63,7 @@ const COLORLEGENDS = [
   },
   {
     title: StatusMapper.lookupDisplayStatus(PROGRAM_STATUSES.PENDING),
-    color: PENDINGSTATUSCOLOR
+    color: PENDINGSTATUSFILLCOLOR,
   },
   {
     title: StatusMapper.lookupDisplayStatus(PROGRAM_STATUSES.STARTING)
@@ -157,7 +158,7 @@ export default class RunsHistoryGraph extends Component {
   getRunStatusStrokeColor = (status) => {
     switch (status) {
       case PROGRAM_STATUSES.PENDING:
-        return PENDINGSTATUSCOLOR;
+        return PENDINGSTATUSSTROKECOLOR;
       default:
         return MARKSERIESSTROKECOLOR;
     }
@@ -170,8 +171,10 @@ export default class RunsHistoryGraph extends Component {
       case PROGRAM_STATUSES.COMPLETED:
         return SUCCESSRUNCOLOR;
       case PROGRAM_STATUSES.RUNNING:
+      case PROGRAM_STATUSES.STARTING:
         return RUNNINGSTATUSCOLOR;
       case PROGRAM_STATUSES.PENDING:
+        return PENDINGSTATUSFILLCOLOR;
       default:
         return MARKSERIESSTROKECOLOR;
     }

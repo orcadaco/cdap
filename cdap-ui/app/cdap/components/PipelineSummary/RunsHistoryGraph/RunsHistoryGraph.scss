@@ -36,6 +36,12 @@ $container_border_color: lightgray;
         .rv-discrete-color-legend-item__title {
           color: $legend_font_color;
         }
+        &:nth-child(3) {
+          .rv-discrete-color-legend-item__color {
+            background: transparent;
+            border: 1px solid $blue-02;
+          }
+        }
       }
     }
   }
