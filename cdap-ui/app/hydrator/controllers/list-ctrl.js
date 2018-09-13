@@ -17,7 +17,7 @@
 angular.module(PKG.name + '.feature.hydrator')
   .controller('HydratorPlusPlusListController',
   function(
-    $scope,myPipelineApi, $stateParams, GLOBALS,
+    $scope, myPipelineApi, $stateParams, GLOBALS,
     mySettings, $state, myHelpers, myWorkFlowApi,
     myWorkersApi, myAppsApi, myAlertOnValium, myLoadingService,
     mySparkApi, $interval, moment, MyPipelineStatusMapper,
@@ -26,7 +26,6 @@ angular.module(PKG.name + '.feature.hydrator')
     vm.$interval = $interval;
     vm.moment = moment;
     vm.pipelineList = [];
-    vm.currentVisiblePipelines = [];
     vm.pipelineListLoaded = false;
     vm.MyPipelineStatusMapper = MyPipelineStatusMapper;
     var eventEmitter = window.CaskCommon.ee(window.CaskCommon.ee);
@@ -61,12 +60,10 @@ angular.module(PKG.name + '.feature.hydrator')
     eventEmitter.on(window.CaskCommon.globalEvents.PUBLISHPIPELINE, vm.reloadState);
 
     vm.goToPage = function () {
-      if (!vm.currentPage) {
-        return;
-      }
       $stateParams.page = vm.currentPage;
       vm.pipelineListLoaded = true;
       $state.go('hydrator.list', $stateParams, {notify: false});
+      vm.fetchRunsCount();
     };
 
     vm.deleteDraft = function(draftId) {
@@ -176,21 +173,36 @@ angular.module(PKG.name + '.feature.hydrator')
         .then(res => {
           res.forEach(resObj => {
             vm.pipelineList = vm.pipelineList.map(app => {
-              let latestRun = resObj.runs[0] || {};
+              // We need the default to be 0 for sorting
+              let latestRun = resObj.runs[0] || {
+                starting: 0,
+                duration: 0
+              };
               if (app.name === resObj.appId) {
+                if (latestRun.starting !== 0) {
+                  latestRun.duration = latestRun.end ?
+                    latestRun.end - latestRun.starting
+                  :
+                    (new Date().getTime() / 1000) - latestRun.starting;
+                }
                 app = Object.assign({}, app, {
                   latestRun: latestRun
                 });
-                vm.setDuration(app, latestRun);
               }
               return app;
             });
           });
-          vm.currentVisiblePipelines = vm.pipelineList.slice(
-            (vm.currentPage - 1) * vm.PAGE_SIZE,
-            ((vm.currentPage - 1) * vm.PAGE_SIZE) + 10
+          // cask-sortable is used for updating the query params
+          // This internal sort is done so that we could request for run counts for pipelines
+          // that are currently visible.
+          const sortOrder = $stateParams.reverse === 'reverse' ? 'desc' : 'asc';
+          const sortByColumn = $stateParams.sortBy ? $stateParams.sortBy.split('.') : ['latestRun', 'starting'];
+          vm.pipelineList = _.sortByOrder(
+            vm.pipelineList,
+            (pipeline) =>  myHelpers.objectQuery.apply(null, [pipeline].concat(sortByColumn)),
+            [sortOrder]
           );
-          vm.fetchRunsCount(vm.currentVisiblePipelines);
+          vm.fetchRunsCount();
           vm.fetchWorkflowNextRunTimes();
           vm.updateStatusAppObject();
         });
@@ -211,22 +223,31 @@ angular.module(PKG.name + '.feature.hydrator')
         });
     };
 
+    vm.getCurrentVisiblePipelines = () => {
+      return vm.pipelineList.slice(
+        (vm.currentPage - 1) * vm.PAGE_SIZE,
+        ((vm.currentPage - 1) * vm.PAGE_SIZE) + 10
+      );
+    };
+
     vm.fetchRunsCount = () => {
-      let runsRequestBody = vm.pipelineList.map(pipeline => {
-        return {
-          appId: pipeline.name,
-          programType: vm.getProgramType(pipeline.artifact.name),
-          programId: vm.getProgramId(pipeline)
-        };
-      });
+      let runsRequestBody = vm
+        .getCurrentVisiblePipelines()
+        .map(pipeline => {
+          return {
+            appId: pipeline.name,
+            programType: vm.getProgramType(pipeline.artifact.name),
+            programId: vm.getProgramId(pipeline)
+          };
+        });
       myPipelineApi.getRunsCount({
         namespace: $stateParams.namespace
       }, runsRequestBody)
         .$promise
         .then((runsCountList) => {
-          vm.currentVisiblePipelines = vm.currentVisiblePipelines.map(pipeline => {
+          vm.pipelineList = vm.pipelineList.map(pipeline => {
             let runsCountObj = _.find(runsCountList, { appId: pipeline.name});
-            let numRuns = '--';
+            let numRuns = 0;
             if (typeof runsCountObj !== 'undefined') {
               numRuns = runsCountObj.runCount;
             }
@@ -241,7 +262,7 @@ angular.module(PKG.name + '.feature.hydrator')
      */
     vm.fetchWorkflowNextRunTimes = () => {
       let batch = [];
-      batch = vm.currentVisiblePipelines
+      batch = vm.getCurrentVisiblePipelines()
         .filter(pipeline => pipeline.artifact.name !== GLOBALS.etlDataStreams)
         .map(pipeline => {
           var workflowId = pipeline.artifact.name === GLOBALS.etlDataPipeline ? 'DataPipelineWorkflow' : 'ETLWorkflow';
@@ -262,7 +283,7 @@ angular.module(PKG.name + '.feature.hydrator')
           .$promise
           .then(function (res) {
           if (res && res.length) {
-            vm.currentVisiblePipelines.forEach(function (app) {
+            vm.getcurrentVisiblePipelines().forEach(function (app) {
               if (app.name === batchParams.appId) {
                 app.nextRun = res[0].time;
               }
@@ -272,14 +293,7 @@ angular.module(PKG.name + '.feature.hydrator')
       });
     };
 
-    vm.setDuration = (app, run = {}) => {
-      if (run.starting) {
-        let lastRunDuration = run.end ? (run.end - run.starting) : (new Date().getTime() / 1000) - run.starting;
-        app.duration = window.CaskCommon.CDAPHelpers.humanReadableDuration(lastRunDuration);
-      }
-    };
-
-    vm.latestRunExists = (app) => Object.keys(app.latestRun).length !== 0;
+    vm.latestRunExists = (app) => app.latestRun.starting !== 0;
 
     vm.updateStatusAppObject =() => {
       angular.forEach(vm.pipelineList, function (app) {

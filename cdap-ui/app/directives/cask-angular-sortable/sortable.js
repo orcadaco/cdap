@@ -69,7 +69,7 @@ function caskSortableDirective ($log, $stateParams, $state) {
       $state.go($state.$current.name, {
         sortBy:  defaultPredicate.attr('data-predicate'),
         reverse: defaultReverse ? 'reverse' : ''
-      }, {notify: false});
+      });
 
       scope.sortable = {
         reverse: defaultReverse
@@ -110,7 +110,7 @@ function caskSortableDirective ($log, $stateParams, $state) {
         $state.go($state.$current.name, {
           sortBy:  predicate,
           reverse: scope.sortable.reverse ? 'reverse' : ''
-        }, {notify: false});
+        });
       });
 
     }
