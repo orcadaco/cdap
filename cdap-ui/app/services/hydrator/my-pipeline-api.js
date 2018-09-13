@@ -34,7 +34,8 @@ angular.module(PKG.name + '.services')
         artifactPropertiesPath = '/namespaces/:namespace/artifacts/:artifactName/versions/:artifactVersion/properties',
         pluginMethodsPath = '/namespaces/:namespace/artifacts/:artifactName/versions/:version/plugintypes/:pluginType/plugins/:pluginName/methods/:methodName',
         previewPath = '/namespaces/:namespace/previews',
-        runsCountPath = '/namespaces/:namespace/runcount';
+        runsCountPath = '/namespaces/:namespace/runcount',
+        latestRuns = '/namespaces/:namespace/runs';
 
 
     return $resource(
@@ -85,6 +86,7 @@ angular.module(PKG.name + '.services')
         // Batch runs count for pipelines
 
         getRunsCount: myHelpers.getConfig('POST', 'REQUEST', runsCountPath, true),
+        getLatestRuns: myHelpers.getConfig('POST', 'REQUEST', latestRuns, true),
 
         postPluginMethod: myHelpers.getConfig('POST', 'REQUEST', pluginMethodsPath, false, { suppressErrors: true }),
         getPluginMethod: myHelpers.getConfig('GET', 'REQUEST', pluginMethodsPath, false, { suppressErrors: true }),

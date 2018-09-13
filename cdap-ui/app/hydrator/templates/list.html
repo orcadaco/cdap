@@ -48,11 +48,11 @@
             <th data-predicate="name">Pipeline name</th>
             <th data-predicate="artifact.name">Type</th>
             <th data-predicate="displayStatus">Status</th>
-            <th data-predicate="_stats.numRuns">Total runs</th>
-            <th data-predicate="_stats.lastStartTime"
+            <th data-predicate="numRuns">Total runs</th>
+            <th data-predicate="lastStartTime"
                   data-predicate-default>Last start time</th>
             <th data-predicate="duration">Duration</th>
-            <th data-predicate="_stats.nextRun">Next run</th>
+            <th data-predicate="nextRun">Next run</th>
             <th skip-sort></th>
           </tr>
         </thead>
@@ -76,12 +76,11 @@
               <span>{{ pipeline.displayStatus }}</span>
             </td>
             <td>
-              <span ng-if="pipeline._stats.numRuns !== 'N/A'">{{ pipeline._stats.numRuns }}</span>
-              <span ng-if="pipeline._stats.numRuns === 'N/A'"> &mdash; </span>
+              <span>{{ pipeline.numRuns }}</span>
             </td>
             <td>
-              <span ng-if="pipeline._stats.lastStartTime === 'N/A' || !pipeline._stats.lastStartTime"> &mdash; </span>
-              <span ng-if="pipeline._stats.lastStartTime !== 'N/A'">{{ pipeline._stats.lastStartTime * 1000 | amDateFormat: 'MM/DD/YY h:mm:ss A' }}</span>
+              <span ng-if="!pipeline.latestRun.starting"> &mdash; </span>
+              <span ng-if="pipeline.latestRun.starting">{{ pipeline.latestRun.starting * 1000 | amDateFormat: 'MM/DD/YY h:mm:ss A' }}</span>
             </td>
 
             <td>
@@ -90,8 +89,8 @@
             </td>
 
             <td>
-              <span ng-if="!pipeline._stats.nextRun"> &mdash; </span>
-              <span ng-if="pipeline._stats.nextRun !== 'N/A'">{{ pipeline._stats.nextRun | amDateFormat: 'MM/DD/YY h:mm:ss A' }}</span>
+              <span ng-if="!pipeline.nextRun"> &mdash; </span>
+              <span ng-if="pipeline.nextRun !== 'N/A'">{{ pipeline.nextRun | amDateFormat: 'MM/DD/YY h:mm:ss A' }}</span>
             </td>
 
             <td>
