@@ -37,20 +37,23 @@ public class ConcurrencyConstraint extends ProtoConstraint.ConcurrencyConstraint
   @Override
   public ConstraintResult check(ProgramSchedule schedule, ConstraintContext context) {
     int numRunning = context.getProgramRuns(schedule.getProgramId(), ProgramRunStatus.RUNNING, maxConcurrency).size();
+    LOG.trace("ConcurrencyConstraint running state {} : {}", schedule.getProgramId(), numRunning);
     if (numRunning >= maxConcurrency) {
-        LOG.debug("Skipping run of program {} from schedule {} because there are at least {} running runs.",
-                  schedule.getProgramId(), schedule.getName(), maxConcurrency);
+      LOG.debug("Skipping run of program {} from schedule {} because there are at least {} running runs.",
+                schedule.getProgramId(), schedule.getName(), maxConcurrency);
       return notSatisfied(context);
     }
 
     int numSuspended =
       context.getProgramRuns(schedule.getProgramId(), ProgramRunStatus.SUSPENDED, maxConcurrency).size();
+    LOG.trace("ConcurrencyConstraint suspended state {} : {}", schedule.getProgramId(), numSuspended);
     if (numRunning + numSuspended >= maxConcurrency) {
-        LOG.debug("Skipping run of program {} from schedule {} because there are at least" +
-                    "{} running runs and at least {} suspended runs.",
-                  schedule.getProgramId(), schedule.getName(), numRunning, numSuspended);
+      LOG.debug("Skipping run of program {} from schedule {} because there are at least" +
+                  "{} running runs and at least {} suspended runs.",
+                schedule.getProgramId(), schedule.getName(), numRunning, numSuspended);
       return notSatisfied(context);
     }
+    LOG.debug("Concurrency constraint satisfied for: {}", schedule.getProgramId());
     return ConstraintResult.SATISFIED;
   }
 

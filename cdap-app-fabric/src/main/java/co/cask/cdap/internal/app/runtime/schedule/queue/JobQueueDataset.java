@@ -44,6 +44,8 @@ import com.google.common.hash.Hashing;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.tephra.Transaction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -63,6 +65,7 @@ import javax.annotation.Nullable;
  *     'M':<topic>
  */
 public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicMessageIdStore {
+  private static final Logger LOG = LoggerFactory.getLogger(JobQueueDataset.class);
 
   static final String EMBEDDED_TABLE_NAME = "t"; // table
   private static final Gson GSON =
@@ -229,6 +232,7 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
 
   @Override
   public void deleteJob(Job job) {
+    LOG.debug("Deleting a job from queue: {} : {}", job.getJobKey(), job.getSchedule().getScheduleId());
     table.delete(getRowKey(job.getSchedule().getScheduleId(), job.getCreationTime()));
   }
 

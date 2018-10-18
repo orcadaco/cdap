@@ -111,8 +111,10 @@ class ConstraintCheckerService extends AbstractIdleService {
                                         taskExecutorService, namespaceQueryAdmin, cConf);
 
     int numPartitions = Schedulers.getJobQueue(multiThreadDatasetCache, datasetFramework).getNumPartitions();
+    LOG.trace("ConstraintCheckerService to be started, partitions count {}", numPartitions);
     for (int partition = 0; partition < numPartitions; partition++) {
       taskExecutorService.submit(new ConstraintCheckerThread(partition));
+      LOG.trace("ConstraintCheckerService to be started, submitted for partition {}", partition);
     }
     LOG.info("Started ConstraintCheckerService. state: " + state());
   }
@@ -173,6 +175,7 @@ class ConstraintCheckerService extends AbstractIdleService {
      */
     private long checkJobQueue() {
       boolean emptyFetch = false;
+      LOG.trace("Start checking job queue.");
       try {
         emptyFetch = Transactions.execute(transactional, new TxCallable<Boolean>() {
           @Override
@@ -180,7 +183,7 @@ class ConstraintCheckerService extends AbstractIdleService {
             return checkJobConstraints();
           }
         });
-
+        LOG.trace("Found emptyFetch while checking: {} ", emptyFetch);
         // run any ready jobs
         runReadyJobs();
         failureCount = 0;
@@ -191,6 +194,7 @@ class ConstraintCheckerService extends AbstractIdleService {
 
       // If there is any failure, delay the next fetch based on the strategy
       if (failureCount > 0) {
+        LOG.trace("Found failure count higher: {}", failureCount);
         // Exponential strategy doesn't use the time component, so doesn't matter what we passed in as startTime
         return scheduleStrategy.nextRetry(failureCount, 0);
       }
@@ -203,25 +207,31 @@ class ConstraintCheckerService extends AbstractIdleService {
       boolean emptyScan = true;
 
       try (CloseableIterator<Job> jobQueueIter = jobQueue.getJobs(partition, lastConsumed)) {
+        LOG.trace("Getting jobs from job queue {} : {} ", partition, lastConsumed);
         Stopwatch stopWatch = new Stopwatch().start();
         // limit the batches of the scan to 1000ms
         while (!stopping && stopWatch.elapsedMillis() < 1000) {
           if (!jobQueueIter.hasNext()) {
+            LOG.trace("Reached end of job queue for partition {}", partition);
             lastConsumed = null;
             return emptyScan;
           }
           Job job = jobQueueIter.next();
           lastConsumed = job;
           emptyScan = false;
+          LOG.trace("Starting check and update for job: {} : {} : {} : {}",
+                    job.getCreationTime(), job.getDeleteTimeMillis(), job.getJobKey(), job.getState());
           checkAndUpdateJob(jobQueue, job);
         }
       }
+      LOG.trace("Returning with emptyScan: {}", emptyScan);
       return emptyScan;
     }
 
     private void checkAndUpdateJob(JobQueueDataset jobQueue, Job job) {
       long now = System.currentTimeMillis();
       if (job.isToBeDeleted()) {
+        LOG.trace("CheckAndUpdate Job, found for deletion, {} : {}", job.getJobKey(), job.getState());
         // only delete jobs that are pending trigger or pending constraint. If pending launch, the launcher will delete
         if ((job.getState() == Job.State.PENDING_CONSTRAINT ||
           // if pending trigger, we need to check if now - deletionTime > 2 * txTimeout. Otherwise the subscriber thread
@@ -231,35 +241,44 @@ class ConstraintCheckerService extends AbstractIdleService {
           // - the subscriber's transaction that may not have seen that change
           (job.getState() == Job.State.PENDING_TRIGGER &&
             now - job.getDeleteTimeMillis() > 2 * Schedulers.SUBSCRIBER_TX_TIMEOUT_MILLIS))) {
+          LOG.trace("CheckAndUpdate Job, add job for for delete, {} : {}", job.getJobKey(), job.getState());
           jobQueue.deleteJob(job);
         }
         return;
       }
       if (now - job.getCreationTime() >= job.getSchedule().getTimeoutMillis() +
         2 * Schedulers.SUBSCRIBER_TX_TIMEOUT_MILLIS) {
+        LOG.trace("CheckAndUpdate Job, adding for deletion due to time out, {} : {}", job.getJobKey(), job.getState());
         LOG.info("Deleted job {}, due to timeout value of {}.", job.getJobKey(), job.getSchedule().getTimeoutMillis());
         jobQueue.deleteJob(job);
         return;
       }
       if (job.getState() != Job.State.PENDING_CONSTRAINT) {
+        LOG.trace("CheckAndUpdate Job, unknown job state, {} : {}", job.getJobKey(), job.getState());
         return;
       }
       ConstraintResult.SatisfiedState satisfiedState = constraintsSatisfied(job, now);
+      LOG.trace("CheckAndUpdate Job, retrieved satisfiedState, {} : {} : {}",
+                job.getJobKey(), job.getState(), satisfiedState);
       if (satisfiedState == ConstraintResult.SatisfiedState.NOT_SATISFIED) {
         return;
       }
       if (satisfiedState == ConstraintResult.SatisfiedState.NEVER_SATISFIED) {
+        LOG.trace("CheckAndUpdate Job, NEVER_SATISFIED constraint so delete, {} : {}", job.getJobKey(), job.getState());
         jobQueue.deleteJob(job);
         return;
       }
+      LOG.trace("CheckAndUpdate Job, transit job state to Pending Launch, {} : {}", job.getJobKey(), job.getState());
       jobQueue.transitState(job, Job.State.PENDING_LAUNCH);
       readyJobs.add(job);
+      LOG.trace("CheckAndUpdate Job, added job for ready to be picked up, {} : {}", job.getJobKey(), job.getState());
     }
 
     private void runReadyJobs() {
       final Iterator<Job> readyJobsIter = readyJobs.iterator();
       while (readyJobsIter.hasNext() && !stopping) {
         final Job job = readyJobsIter.next();
+        LOG.trace("Will initiate run ready job : {} ", job.getJobKey());
         try {
           Transactions.execute(transactional, new TxCallable<Void>() {
             @Override
@@ -284,8 +303,10 @@ class ConstraintCheckerService extends AbstractIdleService {
       // We should check the stored job's state (whether it actually is PENDING_LAUNCH), because
       // the schedule could have gotten deleted in the meantime or the transaction that marked it as PENDING_LAUNCH
       // may have failed / rolled back.
+      LOG.trace("Will run ready job : {} ", job.getJobKey());
       Job storedJob = jobQueue.getJob(job.getJobKey());
       if (storedJob == null) {
+        LOG.trace("Found stored job null : {} ", storedJob.getJobKey());
         return true;
       }
       if (storedJob.isToBeDeleted() || storedJob.getState() != Job.State.PENDING_LAUNCH) {
@@ -295,11 +316,13 @@ class ConstraintCheckerService extends AbstractIdleService {
         // is deleted/updated. We can still launch it.
         // The storedJob state could be something other than PENDING_LAUNCH, if the transaction aborted after added
         // the job to readyJobs (in-memory queue)
+        LOG.trace("Marking job for delete : {} ", storedJob.getJobKey());
         jobQueue.deleteJob(job);
         return true;
       }
 
       try {
+        LOG.trace("About to launch job : {} ", job.getJobKey());
         taskRunner.launch(job);
       } catch (NamespaceNotFoundException | TaskExecutionException e) {
         if (e instanceof TaskExecutionException && !(e.getCause() instanceof ProgramNotFoundException
@@ -316,6 +339,7 @@ class ConstraintCheckerService extends AbstractIdleService {
       }
       // this should not have a conflict, because any updates to the job will first check to make sure that
       // it is not PENDING_LAUNCH
+      LOG.trace("About to send job for delete : {} ", job.getJobKey());
       jobQueue.deleteJob(job);
       return true;
     }
@@ -324,6 +348,7 @@ class ConstraintCheckerService extends AbstractIdleService {
       ConstraintResult.SatisfiedState satisfiedState = ConstraintResult.SatisfiedState.SATISFIED;
 
       ConstraintContext constraintContext = new ConstraintContext(job, now, store);
+      LOG.trace("Check constraints, {} : {}", job.getJobKey(), job.getState());
       for (Constraint constraint : job.getSchedule().getConstraints()) {
         if (!(constraint instanceof CheckableConstraint)) {
           // this shouldn't happen, since implementation of Constraint in ProgramSchedule
@@ -333,7 +358,9 @@ class ConstraintCheckerService extends AbstractIdleService {
         }
 
         CheckableConstraint abstractConstraint = (CheckableConstraint) constraint;
+        LOG.trace("CheckAndUpdate Job, found constraint, {} : {}", job.getJobKey(), abstractConstraint);
         ConstraintResult result = abstractConstraint.check(job.getSchedule(), constraintContext);
+        LOG.trace("CheckAndUpdate Job, found constraint result, {} : {}", job.getJobKey(), result.getSatisfiedState());
         if (result.getSatisfiedState() == ConstraintResult.NEVER_SATISFIED.getSatisfiedState()) {
           // if any of the constraints are NEVER_SATISFIED, return NEVER_SATISFIED
           return ConstraintResult.NEVER_SATISFIED.getSatisfiedState();
