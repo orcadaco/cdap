@@ -247,10 +247,12 @@ public final class SystemArguments {
     Integer memory = getPositiveInt(args, MEMORY_KEY, "memory size");
     Integer cores = getPositiveInt(args, CORES_KEY, "number of cores");
     defaultResources = defaultResources == null ? new Resources() : defaultResources;
+    LOG.info("TEST:: Default resources: {}", defaultResources);
 
     if (memory == null && cores == null) {
       return defaultResources;
     }
+    LOG.info("TEST:: From arguments, resources: {}", memory);
     return new Resources(memory != null ? memory : defaultResources.getMemoryMB(),
                          cores != null ? cores : defaultResources.getVirtualCores());
   }

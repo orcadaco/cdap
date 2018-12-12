@@ -155,9 +155,9 @@ public abstract class DistributedProgramRunner implements ProgramRunner {
   /**
    * Creates a {@link ProgramController} for the given program that was launched as a Twill application.
    *
-   * @param twillController the {@link TwillController} to interact with the twill application
+   * @param twillController   the {@link TwillController} to interact with the twill application
    * @param programDescriptor information for the Program being launched
-   * @param runId the run id of the particular execution
+   * @param runId             the run id of the particular execution
    * @return a new instance of {@link ProgramController}.
    */
   protected abstract ProgramController createProgramController(TwillController twillController,
@@ -167,12 +167,12 @@ public abstract class DistributedProgramRunner implements ProgramRunner {
    * Provides the configuration for launching an program container.
    *
    * @param launchConfig the {@link LaunchConfig} to setup
-   * @param program the program to launch
-   * @param options the program options
-   * @param cConf the configuration for this launch
-   * @param hConf the hadoop configuration for this launch
-   * @param tempDir a temporary directory for creating temp file. The content will be cleanup automatically
-   *                once the program is launch.
+   * @param program      the program to launch
+   * @param options      the program options
+   * @param cConf        the configuration for this launch
+   * @param hConf        the hadoop configuration for this launch
+   * @param tempDir      a temporary directory for creating temp file. The content will be cleanup automatically
+   *                     once the program is launch.
    */
   protected abstract void setupLaunchConfig(LaunchConfig launchConfig, Program program, ProgramOptions options,
                                             CConfiguration cConf, Configuration hConf, File tempDir) throws IOException;
@@ -578,7 +578,8 @@ public abstract class DistributedProgramRunner implements ProgramRunner {
         }
         LOG.debug("Cleanup tmp files for {}: {}", program.getId(), tempDir);
         deleteDirectory(tempDir);
-      }};
+      }
+    };
     controller.onRunning(cleanup, Threads.SAME_THREAD_EXECUTOR);
     controller.onTerminated(cleanup, Threads.SAME_THREAD_EXECUTOR);
     return controller;
@@ -602,7 +603,7 @@ public abstract class DistributedProgramRunner implements ProgramRunner {
       return this;
     }
 
-    public LaunchConfig addExtraClasspath(String...classpath) {
+    public LaunchConfig addExtraClasspath(String... classpath) {
       return addExtraClasspath(Arrays.asList(classpath));
     }
 
@@ -624,8 +625,10 @@ public abstract class DistributedProgramRunner implements ProgramRunner {
     public LaunchConfig addRunnable(String name, TwillRunnable runnable, int instances,
                                     Map<String, String> args, Resources defaultResources,
                                     @Nullable Integer maxRetries) {
+      LOG.info("TEST:: Resources parameters {} and {}", args, defaultResources);
       ResourceSpecification resourceSpec = createResourceSpec(SystemArguments.getResources(args, defaultResources),
                                                               instances);
+      LOG.info("TEST::Resources Spec after substitute are {} for runnable {}", resourceSpec.getMemorySize(), runnable);
 
       Map<String, String> configs = SystemArguments.getTwillContainerConfigs(args, resourceSpec.getMemorySize());
       Map<String, Level> logLevels = SystemArguments.getLogLevels(args);
@@ -645,7 +648,7 @@ public abstract class DistributedProgramRunner implements ProgramRunner {
       return this;
     }
 
-    public LaunchConfig addExtraDependencies(Class<?>...classes) {
+    public LaunchConfig addExtraDependencies(Class<?>... classes) {
       return addExtraDependencies(Arrays.asList(classes));
     }
 

@@ -16,6 +16,9 @@
 
 package co.cask.cdap.api.common;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,6 +27,8 @@ import java.util.Map;
  * Utility class for manipulating runtime arguments.
  */
 public final class RuntimeArguments {
+
+  private static final Logger LOG = LoggerFactory.getLogger(RuntimeArguments.class);
 
   public static final Map<String, String> NO_ARGUMENTS = Collections.emptyMap();
   private static final String ASTERISK = "*";
@@ -34,6 +39,7 @@ public final class RuntimeArguments {
 
   /**
    * Converts a POSIX compliant program argument array to a String-to-String Map.
+   *
    * @param args Array of Strings where each element is a POSIX compliant program argument (Ex: "--os=Linux" ).
    * @return Map of argument Keys and Values (Ex: Key = "os" and Value = "Linux").
    */
@@ -51,6 +57,7 @@ public final class RuntimeArguments {
 
   /**
    * Converts a String-to-String Map to POSIX compliant program argument array.
+   *
    * @param kvMap Map of argument Keys and Values.
    * @return Array of Strings in POSIX compliant format.
    */
@@ -65,6 +72,7 @@ public final class RuntimeArguments {
 
   /**
    * Converts a Iterable of Map.Entry<String, String> to a POSIX compliant program argument array.
+   *
    * @param iterable of Map.Entry of argument Key and Value.
    * @return Array of Strings in POSIX compliant format.
    */
@@ -78,11 +86,11 @@ public final class RuntimeArguments {
 
   /**
    * Identifies arguments with a given scope prefix and adds them back without the scope prefix.
-   *
+   * <p>
    * This method calls {@link #extractScope(String, String, Map)} with {@link Scope#toString()} as the first argument.
    *
-   * @param scope The type of the scope
-   * @param name The name of the scope, e.g. "myTable"
+   * @param scope     The type of the scope
+   * @param name      The name of the scope, e.g. "myTable"
    * @param arguments the runtime arguments of the enclosing scope
    * @return a new map that contains the arguments with and without prefix, never null
    */
@@ -92,7 +100,7 @@ public final class RuntimeArguments {
 
   /**
    * Identifies arguments with a given scope prefix and adds them back without the scope prefix.
-   *
+   * <p>
    * 1. An argument can be prefixed by "&lt;scope>.&lt;name>.". e.g. mapreduce.myMapReduce.read.timeout=30. In this case
    * the MapReduce program named 'myMapReduce' will receive two arguments - mapreduce.myMapReduce.read.timeout=30 and
    * read.timeout=30. However MapReduce programs other than 'myMapReduce' will receive only one argument -
@@ -101,12 +109,13 @@ public final class RuntimeArguments {
    * underlying MapReduce programs will receive the arguments mapreduce.*.read.timeout=30 and read.timeout=30.
    * 3. An argument not prefixed with any scope is passed further without any changes. e.g. read.timeout=30
    *
-   * @param scope The scope prefix
-   * @param name The name of the scope, e.g. "myTable"
+   * @param scope     The scope prefix
+   * @param name      The name of the scope, e.g. "myTable"
    * @param arguments the runtime arguments of the enclosing scope
    * @return a new map that contains the arguments with and without prefix, never null
    */
   public static Map<String, String> extractScope(String scope, String name, Map<String, String> arguments) {
+    LOG.info("TEST:: Will extract runtime params based on scope or willd card. Scope: {} Name: {} Arguments: {}", scope, name, arguments);
     if (arguments == null || arguments.isEmpty()) {
       return new HashMap<>();
     }
@@ -133,14 +142,16 @@ public final class RuntimeArguments {
 
     result.putAll(wildCardPrefixMatchedArgs);
     result.putAll(prefixMatchedArgs);
+
+    LOG.info("TEST:: Update runtime arguments after scope extract: {}", result);
     return result;
   }
 
   /**
    * Add a scope prefix to all arguments.
    *
-   * @param scope The type of the scope
-   * @param name The name of the scope, e.g. "myTable"
+   * @param scope     The type of the scope
+   * @param name      The name of the scope, e.g. "myTable"
    * @param arguments the runtime arguments to be scoped
    * @return a map that contains all keys, prefixed with with &lt;scope>.&lt;name>.
    */
@@ -150,7 +161,7 @@ public final class RuntimeArguments {
     }
     Map<String, String> result = new HashMap<>();
     for (Map.Entry<String, String> entry : arguments.entrySet()) {
-        result.put(addScope(scope, name, entry.getKey()), entry.getValue());
+      result.put(addScope(scope, name, entry.getKey()), entry.getValue());
     }
     return result;
   }
@@ -158,8 +169,8 @@ public final class RuntimeArguments {
   /**
    * Add a scope prefix to an argument name.
    *
-   * @param scope The type of the scope
-   * @param name The name of the scope, e.g. "myTable"
+   * @param scope    The type of the scope
+   * @param name     The name of the scope, e.g. "myTable"
    * @param argument the runtime argument to be scoped
    */
   public static String addScope(Scope scope, String name, String argument) {
@@ -169,8 +180,8 @@ public final class RuntimeArguments {
   /**
    * Add a scope prefix to an argument name.
    *
-   * @param scope The type of the scope
-   * @param name The name of the scope, e.g. "myTable"
+   * @param scope    The type of the scope
+   * @param name     The name of the scope, e.g. "myTable"
    * @param argument the runtime argument to be scoped
    */
   public static String addScope(String scope, String name, String argument) {

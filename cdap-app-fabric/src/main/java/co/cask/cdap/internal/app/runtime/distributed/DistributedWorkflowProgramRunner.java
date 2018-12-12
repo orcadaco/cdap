@@ -50,6 +50,8 @@ import org.apache.twill.api.ClassAcceptor;
 import org.apache.twill.api.RunId;
 import org.apache.twill.api.TwillController;
 import org.apache.twill.api.TwillRunner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.File;
@@ -65,6 +67,8 @@ import java.util.Set;
  * A {@link ProgramRunner} to start a {@link Workflow} program in distributed mode.
  */
 public final class DistributedWorkflowProgramRunner extends DistributedProgramRunner {
+
+  private static final Logger LOG = LoggerFactory.getLogger(DistributedWorkflowProgramRunner.class);
 
   private final ProgramRunnerFactory programRunnerFactory;
 
@@ -150,6 +154,7 @@ public final class DistributedWorkflowProgramRunner extends DistributedProgramRu
     launchConfig.clearRunnables();
     Resources defaultResources = findDriverResources(program.getApplicationSpecification().getSpark(),
                                                      program.getApplicationSpecification().getMapReduce(), spec);
+    LOG.info("TEST:: Default resources for workflow: {}", defaultResources);
 
     launchConfig.addRunnable(spec.getName(), new WorkflowTwillRunnable(spec.getName()), 1,
                              options.getArguments().asMap(), defaultResources, 0);
@@ -167,9 +172,11 @@ public final class DistributedWorkflowProgramRunner extends DistributedProgramRu
     Resources resources = new Resources(768);
 
     for (WorkflowNode node : spec.getNodeIdMap().values()) {
+      LOG.info("TEST:: Workflow node type: {} ", node.getType());
       if (WorkflowNodeType.ACTION == node.getType()) {
         ScheduleProgramInfo programInfo = ((WorkflowActionNode) node).getProgram();
         SchedulableProgramType programType = programInfo.getProgramType();
+        LOG.info("TEST:: SchedulableProgramType fonud: {}", programType);
         if (programType == SchedulableProgramType.SPARK || programType == SchedulableProgramType.MAPREDUCE) {
           // The program spec shouldn't be null, otherwise the Workflow is not valid
           Resources driverResources;
@@ -180,10 +187,12 @@ public final class DistributedWorkflowProgramRunner extends DistributedProgramRu
           }
           if (driverResources != null) {
             resources = max(resources, driverResources);
+            LOG.info("TEST:: Derived driverResources as: {}", resources);
           }
         }
       }
     }
+    LOG.info("TEST:: Final driverResources as: {}", resources);
     return resources;
   }
 

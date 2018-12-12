@@ -45,6 +45,8 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.gson.Gson;
 import org.apache.twill.api.RunId;
 import org.apache.twill.common.Threads;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -59,6 +61,8 @@ import javax.annotation.Nullable;
  * the program to run in a workflow.
  */
 final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
+
+  private static final Logger LOG = LoggerFactory.getLogger(DefaultProgramWorkflowRunner.class);
 
   private static final Gson GSON = new Gson();
 
@@ -123,12 +127,16 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
     systemArgumentsMap.put(ProgramOptionConstants.PROGRAM_NAME_IN_WORKFLOW, name);
     systemArgumentsMap.put(ProgramOptionConstants.WORKFLOW_TOKEN, GSON.toJson(token));
 
+    LOG.info("TEST:: System args map: {}", systemArgumentsMap);
     final ProgramOptions options = new SimpleProgramOptions(
       program.getId(),
       new BasicArguments(Collections.unmodifiableMap(systemArgumentsMap)),
       new BasicArguments(RuntimeArguments.extractScope(program.getType().getScope(), name,
                                                        workflowProgramOptions.getUserArguments().asMap()))
     );
+
+    LOG.info("TEST:: Program options after extract scope: {} for program {} with scope {}. ",
+             options.getArguments().asMap(), name, program.getType().getScope());
 
     return new Runnable() {
       @Override
@@ -173,7 +181,7 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
   /**
    * Adds a listener to the {@link ProgramController} and blocks for completion.
    *
-   * @param closeable a {@link Closeable} to call when the program execution completed
+   * @param closeable  a {@link Closeable} to call when the program execution completed
    * @param controller the {@link ProgramController} for the program
    * @throws Exception if the execution failed
    */
@@ -187,13 +195,13 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
         switch (currentState) {
           case COMPLETED:
             completed();
-          break;
+            break;
           case KILLED:
             killed();
-          break;
+            break;
           case ERROR:
             error(cause);
-          break;
+            break;
         }
       }
 

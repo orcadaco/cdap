@@ -24,7 +24,6 @@ import co.cask.cdap.api.dataset.lib.PartitionFilter;
 import co.cask.cdap.api.dataset.lib.PartitionedFileSet;
 import co.cask.cdap.api.macro.MacroEvaluator;
 import co.cask.cdap.api.metrics.Metrics;
-import co.cask.cdap.api.plugin.Plugin;
 import co.cask.cdap.api.plugin.PluginContext;
 import co.cask.cdap.api.schedule.ProgramStatusTriggerInfo;
 import co.cask.cdap.api.schedule.TriggerInfo;
@@ -116,7 +115,8 @@ public class SmartWorkflow extends AbstractWorkflow {
                                                                                 Constants.PIPELINE_LIFECYCLE_TAG_VALUE);
   private static final Gson GSON = new GsonBuilder()
     .registerTypeAdapter(Schema.class, new SchemaTypeAdapter()).create();
-  private static final Type STAGE_PROPERTIES_MAP = new TypeToken<Map<String, Map<String, String>>>() { }.getType();
+  private static final Type STAGE_PROPERTIES_MAP = new TypeToken<Map<String, Map<String, String>>>() {
+  }.getType();
 
   private final ApplicationConfigurer applicationConfigurer;
   private final Set<String> supportedPluginTypes;
@@ -615,6 +615,7 @@ public class SmartWorkflow extends AbstractWorkflow {
     } else if (pluginTypes.contains(Constants.SPARK_PROGRAM_PLUGIN_TYPE)) {
       // spark programs will be all by themselves in a phase
       String stageName = phase.getStagesOfType(Constants.SPARK_PROGRAM_PLUGIN_TYPE).iterator().next().getName();
+      LOG.info("Adding program for spark {} While useSpark is {}", stageName, useSpark);
       StageSpec stageSpec = stageSpecs.get(stageName);
       applicationConfigurer.addSpark(new ExternalSparkProgram(batchPhaseSpec, stageSpec));
       programAdder.addSpark(programName);

@@ -37,6 +37,8 @@ import org.apache.twill.api.EventHandler;
 import org.apache.twill.api.RunId;
 import org.apache.twill.api.TwillController;
 import org.apache.twill.api.TwillRunner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -45,6 +47,8 @@ import java.io.IOException;
  * Distributed ProgramRunner for Worker.
  */
 public class DistributedWorkerProgramRunner extends DistributedProgramRunner {
+
+  private static final Logger LOG = LoggerFactory.getLogger(DistributedWorkerProgramRunner.class);
 
   @Inject
   DistributedWorkerProgramRunner(TwillRunner twillRunner, YarnConfiguration hConf, CConfiguration cConf,
@@ -82,6 +86,8 @@ public class DistributedWorkerProgramRunner extends DistributedProgramRunner {
 
     String instances = options.getArguments().getOption(ProgramOptionConstants.INSTANCES,
                                                         String.valueOf(workerSpec.getInstances()));
+    LOG.info("TEST:: Adding worker program: name {}, options {}, specs {}.",
+             workerSpec.getName(), options, workerSpec.getResources());
     launchConfig.addRunnable(workerSpec.getName(), new WorkerTwillRunnable(workerSpec.getName()),
                              Integer.parseInt(instances), options.getUserArguments().asMap(),
                              workerSpec.getResources());
