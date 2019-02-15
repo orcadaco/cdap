@@ -44,6 +44,8 @@ import com.google.common.hash.Hashing;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.tephra.Transaction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -53,16 +55,17 @@ import javax.annotation.Nullable;
 
 /**
  * Dataset that stores {@link Job}s, which correspond to schedules that have been triggered, but not yet executed.
- *
+ * <p>
  * Row Key is in the following formats:
- *   For Jobs:
- *     'J':<partition_id>:<scheduleId>:<timestamp>
- *     The <partition_id> is a hash based upon the scheduleId
- *
- *   For TMS MessageId:
- *     'M':<topic>
+ * For Jobs:
+ * 'J':<partition_id>:<scheduleId>:<timestamp>
+ * The <partition_id> is a hash based upon the scheduleId
+ * <p>
+ * For TMS MessageId:
+ * 'M':<topic>
  */
 public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicMessageIdStore {
+  private static final Logger LOG = LoggerFactory.getLogger(JobQueueDataset.class);
 
   static final String EMBEDDED_TABLE_NAME = "t"; // table
   private static final Gson GSON =
@@ -72,12 +75,12 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
       .create();
 
   // simply serialize the entire Job into one column
-  private static final byte[] COL = new byte[] {'C'};
-  private static final byte[] TO_DELETE_COL = new byte[] {'D'};
-  private static final byte[] IS_OBSOLETE_COL = new byte[] {'O'};
-  private static final byte[] JOB_ROW_PREFIX = new byte[] {'J'};
-  private static final byte[] ROW_KEY_SEPARATOR = new byte[] {':'};
-  private static final byte[] MESSAGE_ID_ROW_PREFIX = new byte[] {'M'};
+  private static final byte[] COL = new byte[]{'C'};
+  private static final byte[] TO_DELETE_COL = new byte[]{'D'};
+  private static final byte[] IS_OBSOLETE_COL = new byte[]{'O'};
+  private static final byte[] JOB_ROW_PREFIX = new byte[]{'J'};
+  private static final byte[] ROW_KEY_SEPARATOR = new byte[]{':'};
+  private static final byte[] MESSAGE_ID_ROW_PREFIX = new byte[]{'M'};
 
   private static final int NUM_PARTITIONS = 16;
 
@@ -134,6 +137,7 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
     job.getState().checkTransition(state);
     Job newJob = new SimpleJob(job.getSchedule(), job.getCreationTime(), job.getNotifications(), state,
                                job.getScheduleLastUpdatedTime());
+    LOG.trace("New job created: {}", newJob);
     put(newJob);
     return newJob;
   }
@@ -229,6 +233,7 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
 
   @Override
   public void deleteJob(Job job) {
+    LOG.trace("Deleting a job from queue: {} : {}", job.getJobKey(), job.getSchedule().getScheduleId());
     table.delete(getRowKey(job.getSchedule().getScheduleId(), job.getCreationTime()));
   }
 
@@ -248,10 +253,13 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
       Preconditions.checkArgument(partition == getPartition(lastJobProcessed.getSchedule().getScheduleId()),
                                   "Job is not from partition '%s': %s", partition, lastJobProcessed);
       byte[] jobRowKey = getRowKey(lastJobProcessed.getSchedule().getScheduleId(), lastJobProcessed.getCreationTime());
+      LOG.trace("Created jobRowKey for schedule {} creation time {}",
+                lastJobProcessed.getSchedule().getScheduleId(), lastJobProcessed.getCreationTime());
       // we want to exclude the given Job from the scan
       startKey = Bytes.stopKeyForPrefix(jobRowKey);
     }
     byte[] stopKey = Bytes.stopKeyForPrefix(jobRowPrefix);
+    LOG.trace("Getting jobs for partition {}, startKey {}, stopKey {}", partition, startKey, stopKey);
     return createCloseableIterator(table.scan(startKey, stopKey));
   }
 
@@ -286,6 +294,7 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
     Long timeToSet = toBeDeletedTime == null ? isObsoleteTime :
       isObsoleteTime == null ? toBeDeletedTime : new Long(Math.min(isObsoleteTime, toBeDeletedTime));
     if (timeToSet != null) {
+      LOG.trace("Job setToBeDeleted {} at time {}", jobJsonString, timeToSet);
       job.setToBeDeleted(timeToSet);
     }
     return job;
@@ -293,6 +302,7 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
 
   private Put toPut(Job job) {
     ScheduleId scheduleId = job.getSchedule().getScheduleId();
+    LOG.trace("New Rowkey for job: {}", getRowKey(scheduleId, job.getCreationTime()));
     return new Put(getRowKey(scheduleId, job.getCreationTime()), COL, GSON.toJson(job));
   }
 

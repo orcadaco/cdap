@@ -99,11 +99,11 @@ import javax.annotation.Nullable;
 
 /**
  * Debugging tool for {@link JobQueue}.
- *
+ * <p>
  * Because the JobQueue is scanned over multiple transactions, it will be an inconsistent view.
  * The same Job will not be counted multiple times, but some Jobs may be missed if they were deleted or added during
  * the scan. The count of the Job State may also be inconsistent.
- *
+ * <p>
  * The publish timestamp of the last message processed from the topics will also be inconsistent from the Jobs in the
  * JobQueue.
  */
@@ -239,6 +239,7 @@ public class JobQueueDebugger extends AbstractIdleService {
 
     // returns true if there are more Jobs in the partitions
     private boolean scanJobQueue(JobQueue jobQueue, int partition, JobStatistics jobStatistics) {
+      System.out.printf("Scanning for partition %s, lastJobConsumed %s \n", partition, lastJobConsumed);
       try (CloseableIterator<Job> jobs = jobQueue.getJobs(partition, lastJobConsumed)) {
         Stopwatch stopwatch = new Stopwatch().start();
         while (stopwatch.elapsedMillis() < 1000) {
@@ -249,6 +250,7 @@ public class JobQueueDebugger extends AbstractIdleService {
           lastJobConsumed = jobs.next();
           jobStatistics.updateWithJob(lastJobConsumed);
         }
+        System.out.println("Reached end of time, will try again for more jobs");
         return true;
       }
     }
@@ -324,9 +326,11 @@ public class JobQueueDebugger extends AbstractIdleService {
                              "  Pending Trigger: %s\n" +
                              "  Pending Constraint: %s\n" +
                              "  Pending Launch: %s\n" +
-                             "  Total: %s\n",
+                             "  Total: %s\n" +
+                             "  Oldest: %s\n" +
+                             "  Newest: %s\n",
                            pendingTrigger, pendingConstraint, pendingLaunch,
-                           getTotal());
+                           getTotal(), oldestJob, newestJob);
     }
 
     // updates this JobQueueStatistics with the results of the JobQueueStatistics passed in
@@ -424,6 +428,7 @@ public class JobQueueDebugger extends AbstractIdleService {
 
     boolean trace = false;
     if (commandLine.hasOption("t")) {
+      System.out.println("Running JobQueueDebugger in trace mode!");
       trace = true;
     }
 

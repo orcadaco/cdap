@@ -144,6 +144,7 @@ public class CoreSchedulerService extends AbstractIdleService implements Schedul
             LOG.info("Cleaning up jobs in state {}.", Job.State.PENDING_LAUNCH);
             while (jobIter.hasNext()) {
               Job job = jobIter.next();
+              LOG.trace("Found job for cleanup {} having state {}", job.getJobKey(), job.getState());
               if (job.getState() == Job.State.PENDING_LAUNCH) {
                 LOG.warn("Removing job because it was left in state {} from a previous run of the scheduler: {} .",
                          Job.State.PENDING_LAUNCH, job);
