@@ -17,7 +17,6 @@
 package co.cask.cdap.internal.app.runtime.batch;
 
 import co.cask.cdap.api.app.ApplicationSpecification;
-import co.cask.cdap.api.data.batch.Input;
 import co.cask.cdap.api.data.batch.Output;
 import co.cask.cdap.api.plugin.Plugin;
 import co.cask.cdap.app.runtime.Arguments;
@@ -31,11 +30,9 @@ import co.cask.cdap.internal.app.runtime.workflow.WorkflowProgramInfo;
 import co.cask.cdap.proto.id.ProgramId;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -66,13 +63,15 @@ public final class MapReduceContextConfig {
     .registerTypeAdapter(Arguments.class, new ArgumentsCodec())
     .registerTypeAdapter(ProgramOptions.class, new ProgramOptionsCodec())
     .create();
-  private static final Type PLUGIN_MAP_TYPE = new TypeToken<Map<String, Plugin>>() { }.getType();
-  private static final Type OUTPUT_LIST_TYPE = new TypeToken<List<Output.DatasetOutput>>() { }.getType();
+  private static final Type PLUGIN_MAP_TYPE = new TypeToken<Map<String, Plugin>>() {
+  }.getType();
+  private static final Type OUTPUT_LIST_TYPE = new TypeToken<List<Output.DatasetOutput>>() {
+  }.getType();
 
   private static final String HCONF_ATTR_APP_SPEC = "cdap.mapreduce.app.spec";
   private static final String HCONF_ATTR_PROGRAM_ID = "cdap.mapreduce.program.id";
   private static final String HCONF_ATTR_WORKFLOW_INFO = "cdap.mapreduce.workflow.info";
-  private static final String HCONF_ATTR_PLUGINS = "cdap.mapreduce.plugins";
+  static final String HCONF_ATTR_PLUGINS = "cdap.mapreduce.plugins";
   private static final String HCONF_ATTR_PROGRAM_JAR_URI = "cdap.mapreduce.program.jar.uri";
   private static final String HCONF_ATTR_CCONF = "cdap.mapreduce.cconf";
   private static final String HCONF_ATTR_LOCAL_FILES = "cdap.mapreduce.local.files";
@@ -92,9 +91,9 @@ public final class MapReduceContextConfig {
   /**
    * Updates the {@link Configuration} of this class with the given paramters.
    *
-   * @param context the context for the MapReduce program
-   * @param conf the CDAP configuration
-   * @param programJarURI The URI of the program JAR
+   * @param context                the context for the MapReduce program
+   * @param conf                   the CDAP configuration
+   * @param programJarURI          The URI of the program JAR
    * @param localizedUserResources the localized resources for the MapReduce program
    */
   public void set(BasicMapReduceContext context, CConfiguration conf, URI programJarURI,
@@ -183,7 +182,7 @@ public final class MapReduceContextConfig {
    * Returns the plugins being used in the MapReduce program.
    */
   public Map<String, Plugin> getPlugins() {
-    String spec = hConf.get(HCONF_ATTR_PLUGINS);
+    String spec = hConf.getRaw(HCONF_ATTR_PLUGINS);
     if (spec == null) {
       return ImmutableMap.of();
     }
@@ -214,7 +213,8 @@ public final class MapReduceContextConfig {
 
   Map<String, File> getLocalizedResources() {
     Map<String, String> nameToPath = GSON.fromJson(hConf.get(HCONF_ATTR_LOCAL_FILES),
-                                                 new TypeToken<Map<String, String>>() { }.getType());
+                                                   new TypeToken<Map<String, String>>() {
+                                                   }.getType());
     Map<String, File> nameToFile = new HashMap<>();
     for (Map.Entry<String, String> entry : nameToPath.entrySet()) {
       nameToFile.put(entry.getKey(), new File(entry.getValue()));

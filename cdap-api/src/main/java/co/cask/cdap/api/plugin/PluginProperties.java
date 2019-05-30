@@ -23,6 +23,8 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
+
 import javax.annotation.Nullable;
 
 /**
@@ -55,18 +57,44 @@ public class PluginProperties implements Serializable {
   }
 
   public Macros getMacros() {
-    return  (macros == null) ? new Macros() : macros;
+    return (macros == null) ? new Macros() : macros;
   }
 
   /**
    * Creates and returns a new instance of Plugin properties with current properties and the passed macros parameter.
    * Note this is used internally by the CDAP Platform and it is advisable
    * that plugin developers not use this method.
+   *
    * @param macros set of macros used by this plugin.
    * @return new instance of plugin properties with macros set.
    */
   public PluginProperties setMacros(Macros macros) {
     return new PluginProperties(getProperties(), macros);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    PluginProperties that = (PluginProperties) o;
+    return Objects.equals(properties, that.properties) && Objects.equals(macros, that.macros);
+  }
+
+  @Override
+  public String toString() {
+    return "PluginProperties{" +
+      "properties=" + properties +
+      ", macros=" + macros +
+      '}';
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(properties, macros);
   }
 
   /**
@@ -93,7 +121,8 @@ public class PluginProperties implements Serializable {
 
     /**
      * Adds a property
-     * @param key the name of the property
+     *
+     * @param key   the name of the property
      * @param value the value of the property
      * @return this builder
      */
