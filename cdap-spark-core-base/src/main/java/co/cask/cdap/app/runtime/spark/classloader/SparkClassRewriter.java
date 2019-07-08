@@ -50,11 +50,13 @@ import java.io.PrintStream;
 import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 
@@ -64,6 +66,7 @@ import javax.annotation.Nullable;
 public class SparkClassRewriter implements ClassRewriter {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkClassRewriter.class);
+  private static final Type[] EMPTY_ARGS = new Type[0];
 
   // Define some of the class types used for bytecode rewriting purpose. Cannot be referred with .class since
   // those classes may not be available to the ClassLoader of this class (they are loadable from this ClassLoader).
@@ -101,6 +104,7 @@ public class SparkClassRewriter implements ClassRewriter {
     Type.getObjectType("co/cask/cdap/app/runtime/spark/serializer/SchemaSerializer");
   private static final Type STRUCTURED_RECORD_SERIALIZER_TYPE =
     Type.getObjectType("co/cask/cdap/app/runtime/spark/serializer/StructuredRecordSerializer");
+  private static final Type SPARK_DISK_STORE = Type.getObjectType("org/apache/spark/storage/DiskStore");
 
   // Don't refer akka Remoting with the ".class" because in future Spark version, akka dependency is removed and
   // we don't want to force a dependency on akka.
@@ -109,9 +113,19 @@ public class SparkClassRewriter implements ClassRewriter {
   private static final Type EXECUTION_CONTEXT_EXECUTOR_TYPE =
     Type.getObjectType("scala/concurrent/ExecutionContextExecutor");
 
+  private static final Type NETTY_REFERENCE_COUNTED_TYPE = Type.getObjectType("io/netty/util/ReferenceCounted");
+  private static final Type NETTY_FILE_REGION_TYPE = Type.getObjectType("io/netty/channel/FileRegion");
+  private static final List<Method> NETTY_FILE_REGION_RC_METHODS = Arrays.asList(
+    new Method("retain", NETTY_REFERENCE_COUNTED_TYPE, EMPTY_ARGS),
+    new Method("retain", NETTY_REFERENCE_COUNTED_TYPE, new Type[] { Type.INT_TYPE }),
+    new Method("touch", NETTY_REFERENCE_COUNTED_TYPE, EMPTY_ARGS),
+    new Method("touch", NETTY_REFERENCE_COUNTED_TYPE, new Type[] { Type.getType(Object.class) })
+  );
+
   // File name of the Spark conf directory as defined by the Spark framework
   // This is for the Hack to workaround CDAP-5019 (SPARK-13441)
   private static final String LOCALIZED_CONF_DIR = SparkPackageUtils.LOCALIZED_CONF_DIR;
+  private static final String LOCALIZED_CONF_DIR_ZIP = LOCALIZED_CONF_DIR + ".zip";
   // File entry name of the SparkConf properties file inside the Spark conf zip
   private static final String SPARK_CONF_FILE = "__spark_conf__.properties";
 
@@ -195,6 +209,10 @@ public class SparkClassRewriter implements ClassRewriter {
     if (className.equals(KRYO_TYPE.getClassName())) {
       // CDAP-9314 Rewrite the Kryo constructor to register serializer for CDAP classes
       return rewriteKryo(input);
+    }
+    if (className.equals(SPARK_DISK_STORE.getClassName()) || className.startsWith("org.apache.spark.network.")) {
+      // Rewrite Spark DiskStore class and classes in the network package for Netty 4.1 compatibility
+      return rewriteSparkNetworkClass(input);
     }
 
     return null;
@@ -329,7 +347,7 @@ public class SparkClassRewriter implements ClassRewriter {
 
     final Type classloaderType = Type.getType(ClassLoader.class);
     final Type parentClassLoaderType = Type.getObjectType("org/apache/spark/util/ParentClassLoader");
-    final Method parentLoaderMethod = new Method("parentLoader", parentClassLoaderType, new Type[0]);
+    final Method parentLoaderMethod = new Method("parentLoader", parentClassLoaderType, EMPTY_ARGS);
 
     // Map from getResource* methods to the method signature
     // (can be null, since only method that has generic has signature)
@@ -601,7 +619,7 @@ public class SparkClassRewriter implements ClassRewriter {
           @Override
           protected void onMethodEnter() {
             cancellable = newLocal(cancellableType);
-            invokeStatic(SPARK_RUNTIME_UTILS_TYPE, new Method("initSparkMain", cancellableType, new Type[0]));
+            invokeStatic(SPARK_RUNTIME_UTILS_TYPE, new Method("initSparkMain", cancellableType, EMPTY_ARGS));
             storeLocal(cancellable);
 
             // try {
@@ -630,7 +648,7 @@ public class SparkClassRewriter implements ClassRewriter {
             // }
             visitLabel(finallyLabel);
             loadLocal(cancellable);
-            invokeInterface(cancellableType, new Method("cancel", Type.VOID_TYPE, new Type[0]));
+            invokeInterface(cancellableType, new Method("cancel", Type.VOID_TYPE, EMPTY_ARGS));
           }
         };
       }
@@ -808,6 +826,113 @@ public class SparkClassRewriter implements ClassRewriter {
   }
 
   /**
+   * Rewrite Spark classes in the network package for Netty 4.1 compatibility.
+   *
+   * <ol>
+   *   <li>FileRegion interface has a new method, transferred() that replaces the old transfered() method</li>
+   *   <li>
+   *     FileRegion interface, which implements ReferenceCounted interface, has a new touch(Object hint) method
+   *     that is not implemented by the AbstractReferenceCounted based class.
+   *   </li>
+   * </ol>
+   *
+   * @param input the source bytecode
+   * @return the rewritten class or {@code null} if rewrite is not needed
+   */
+  @Nullable
+  private byte[] rewriteSparkNetworkClass(InputStream byteCodeStream) throws IOException {
+    ClassReader cr = new ClassReader(byteCodeStream);
+    ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+
+    // Scan for class type and methods to see if the rewriting is needed
+    final AtomicBoolean rewritten = new AtomicBoolean(false);
+    cr.accept(new ClassVisitor(Opcodes.ASM5, cw) {
+
+      private Type classType;
+      private boolean isFileRegion;
+      private boolean hasTransferredMethod;
+      private boolean hasTouchMethod;
+
+      @Override
+      public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+        // See if it implements netty FileRegion.
+        if (interfaces != null && Arrays.asList(interfaces).contains(NETTY_FILE_REGION_TYPE.getInternalName())) {
+          isFileRegion = true;
+          classType = Type.getObjectType(name);
+        }
+        super.visit(version, access, name, signature, superName, interfaces);
+      }
+
+      @Override
+      public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
+        // See if the class has the method `transferred()`.
+        if ("transferred".equals(name) && Type.getArgumentTypes(desc).length == 0) {
+          hasTransferredMethod = true;
+        }
+        // See if the class has the method `touch(Object)`.
+        if ("touch".equals(name)) {
+          Type[] args = Type.getArgumentTypes(desc);
+          if (args.length == 1 && Type.getType(Object.class).equals(args[0])) {
+            hasTouchMethod = true;
+          }
+        }
+        return super.visitMethod(access, name, desc, signature, exceptions);
+      }
+
+      @Override
+      public void visitEnd() {
+        if (isFileRegion) {
+          if (!hasTransferredMethod) {
+            // Generate the `long transferred()` method by calling `return transfered();` method
+            Method method = new Method("transferred", Type.LONG_TYPE, EMPTY_ARGS);
+            MethodVisitor mv = super.visitMethod(Opcodes.ACC_PUBLIC, method.getName(),
+                                                 method.getDescriptor(), null, null);
+            GeneratorAdapter generator = new GeneratorAdapter(Opcodes.ACC_PUBLIC, method, mv);
+            generator.loadThis();
+            generator.invokeVirtual(classType, new Method("transfered", Type.LONG_TYPE, EMPTY_ARGS));
+            generator.returnValue();
+            generator.endMethod();
+
+            rewritten.set(true);
+          }
+          if (!hasTouchMethod) {
+            // Generate four (method, synthetic method) pairs from the ReferenceCounted interface
+            // that FileRegion overridden to have FileRegion as return type
+            for (Method m : NETTY_FILE_REGION_RC_METHODS) {
+              // Need to generate the actual implementation of the touch methods
+              if (m.getName().equals("touch")) {
+                String desc = Type.getMethodDescriptor(NETTY_FILE_REGION_TYPE, m.getArgumentTypes());
+                MethodVisitor mv = super.visitMethod(Opcodes.ACC_PUBLIC, m.getName(), desc, null, null);
+                GeneratorAdapter generator = new GeneratorAdapter(mv, Opcodes.ACC_PUBLIC, m.getName(), desc);
+                generator.loadThis();
+                generator.returnValue();
+                generator.endMethod();
+              }
+
+              // Generate the synthetic method by just calling the actual method
+              int syntheticAccess = Opcodes.ACC_PUBLIC | Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC;
+              MethodVisitor mv = super.visitMethod(syntheticAccess, m.getName(), m.getDescriptor(), null, null);
+              GeneratorAdapter generator = new GeneratorAdapter(syntheticAccess, m, mv);
+              generator.loadThis();
+              for (int i = 0; i < m.getArgumentTypes().length; i++) {
+                generator.loadArg(i);
+              }
+              generator.invokeVirtual(classType, new Method(m.getName(), NETTY_FILE_REGION_TYPE, m.getArgumentTypes()));
+              generator.returnValue();
+              generator.endMethod();
+            }
+
+            rewritten.set(true);
+          }
+        }
+        super.visitEnd();
+      }
+    }, 0);
+
+    return rewritten.get() ? cw.toByteArray() : null;
+  }
+
+  /**
    * Find the return type of the ActorSystem.dispatcher() method. It is ExecutionContextExecutor in
    * Akka 2.3 (Spark 1.2+) and ExecutionContext in Akka 2.2 (Spark < 1.2, which CDAP doesn't support,
    * however the Spark 1.5 in CDH 5.6. still has Akka 2.2, instead of 2.3).
@@ -885,12 +1010,9 @@ public class SparkClassRewriter implements ClassRewriter {
           return mv;
         }
 
-        Type fileType = Type.getType(File.class);
-        Type stringType = Type.getType(String.class);
-
         // Check if it's a recognizable return type.
         // Spark 1.5+ return type is File
-        boolean isReturnFile = Type.getReturnType(desc).equals(fileType);
+        boolean isReturnFile = Type.getReturnType(desc).equals(Type.getType(File.class));
         Type optionType = Type.getObjectType("scala/Option");
         if (!isReturnFile) {
           // Spark 1.4 return type is Option<File>
@@ -901,29 +1023,27 @@ public class SparkClassRewriter implements ClassRewriter {
         }
 
         // Generate this for Spark 1.5+
-        // return SparkRuntimeUtils.createConfArchive(this.sparkConf, SPARK_CONF_FILE, LOCALIZED_CONF_DIR,
-        //                                            File.createTempFile(LOCALIZED_CONF_DIR, ".zip"));
+        // return SparkRuntimeUtils.createConfArchive(this.sparkConf, SPARK_CONF_FILE,
+        //                                            LOCALIZED_CONF_DIR, LOCALIZED_CONF_DIR_ZIP);
         // Generate this for Spark 1.4
-        // return Option.apply(SparkRuntimeUtils.createConfArchive(this.sparkConf, SPARK_CONF_FILE, LOCALIZED_CONF_DIR,
-        //                                                         File.createTempFile(LOCALIZED_CONF_DIR, ".zip")));
+        // return Option.apply(SparkRuntimeUtils.createConfArchive(this.sparkConf, SPARK_CONF_FILE,
+        //                                                         LOCALIZED_CONF_DIR, LOCALIZED_CONF_DIR_ZIP));
         GeneratorAdapter mg = new GeneratorAdapter(mv, access, name, desc);
 
-        // Push the four parameters for the SparkRuntimeUtils.createConfArchive method
         // load this.sparkConf to the stack
         mg.loadThis();
         mg.getField(Type.getObjectType("org/apache/spark/deploy/yarn/Client"), "sparkConf", SPARK_CONF_TYPE);
+
+        // push three constants to the stack
         mg.visitLdcInsn(SPARK_CONF_FILE);
         mg.visitLdcInsn(LOCALIZED_CONF_DIR);
-
-        // Call the File.createTempFile(LOCALIZED_CONF_DIR, ".zip") to generate the forth parameter
-        mg.visitLdcInsn(LOCALIZED_CONF_DIR);
-        mg.visitLdcInsn(".zip");
-        mg.invokeStatic(fileType, new Method("createTempFile", fileType, new Type[] { stringType, stringType }));
+        mg.visitLdcInsn(LOCALIZED_CONF_DIR_ZIP);
 
         // call SparkRuntimeUtils.createConfArchive, return a File and leave it in stack
+        Type stringType = Type.getType(String.class);
         mg.invokeStatic(SPARK_RUNTIME_UTILS_TYPE,
-                        new Method("createConfArchive", fileType,
-                                   new Type[] { SPARK_CONF_TYPE, stringType, stringType, fileType}));
+                        new Method("createConfArchive", Type.getType(File.class),
+                                   new Type[] { SPARK_CONF_TYPE, stringType, stringType, stringType}));
         if (isReturnFile) {
           // Spark 1.5+ return type is File, hence just return the File from the stack
           mg.returnValue();
@@ -1021,9 +1141,9 @@ public class SparkClassRewriter implements ClassRewriter {
       Type programType = Type.getType(Program.class);
 
       // Use the name of the spark program class as the logger name
-      adapter.invokeStatic(runtimeContextProviderType, new Method("get", runtimeContextType, new Type[0]));
-      adapter.invokeVirtual(runtimeContextType, new Method("getProgram", programType, new Type[0]));
-      adapter.invokeInterface(programType, new Method("getMainClassName", STRING_TYPE, new Type[0]));
+      adapter.invokeStatic(runtimeContextProviderType, new Method("get", runtimeContextType, EMPTY_ARGS));
+      adapter.invokeVirtual(runtimeContextType, new Method("getProgram", programType, EMPTY_ARGS));
+      adapter.invokeInterface(programType, new Method("getMainClassName", STRING_TYPE, EMPTY_ARGS));
       adapter.invokeStatic(loggerFactoryType,
                            new Method("getLogger", loggerType, new Type[]{STRING_TYPE}));
 
