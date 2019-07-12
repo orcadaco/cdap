@@ -191,8 +191,7 @@ public final class Constants {
     public static final String PROGRAM_MAX_START_SECONDS = "app.program.max.start.seconds";
     public static final String PROGRAM_MAX_STOP_SECONDS = "app.program.max.stop.seconds";
     public static final String YARN_ATTEMPT_FAILURES_VALIDITY_INTERVAL =
-      "app.program.yarn.attempt.failures.validity.interval";
-
+        "app.program.yarn.attempt.failures.validity.interval";
     /**
      * Guice named bindings.
      */
@@ -554,6 +553,7 @@ public final class Constants {
     public static final String CONNECTION_TIMEOUT_SECS = "router.connection.idle.timeout.secs";
     public static final String ROUTER_USERSERVICE_FALLBACK_STRAGEY = "router.userservice.fallback.strategy";
     public static final String ROUTER_AUDIT_PATH_CHECK_ENABLED = "router.audit.path.check.enabled";
+    public static final String ROUTER_AUDIT_LOG_ENABLED = "router.audit.log.enabled";
 
     /**
      * Defaults.
@@ -563,6 +563,7 @@ public final class Constants {
     public static final String GATEWAY_DISCOVERY_NAME = Service.GATEWAY;
     public static final String WEBAPP_DISCOVERY_NAME = "webapp/$HOST";
     public static final String DONT_ROUTE_SERVICE = "dont-route-to-service";
+    public static final String AUDIT_LOGGER_NAME = "http-access";
   }
 
   /**
@@ -597,7 +598,6 @@ public final class Constants {
 
     // Key prefix for retention seconds. The actual key is suffixed by the table resolution.
     public static final String RETENTION_SECONDS = "metrics.data.table.retention.resolution";
-
     public static final String SERVER_ADDRESS = "metrics.query.bind.address";
     public static final String SERVER_PORT = "metrics.query.bind.port";
 
@@ -605,6 +605,7 @@ public final class Constants {
     public static final String KAFKA_TOPIC_PREFIX = "metrics.kafka.topic.prefix";
     public static final String KAFKA_PARTITION_SIZE = "metrics.kafka.partition.size";
     public static final String KAFKA_CONSUMER_PERSIST_THRESHOLD = "metrics.kafka.consumer.persist.threshold";
+    // legacy name, we no longer use Kafka for metrics, we use TMS
     public static final String KAFKA_META_TABLE = "metrics.kafka.meta.table";
 
     // NOTE: "v2" to avoid conflict with data of older metrics system
@@ -620,7 +621,7 @@ public final class Constants {
     public static final int DEFAULT_TIME_SERIES_TABLE_ROLL_TIME = 3600;
 
     public static final long DEFAULT_RETENTION_HOURS = 2;
-
+    
     public static final int DEFAULT_KAFKA_CONSUMER_PERSIST_THRESHOLD = 100;
 
     public static final String MESSAGING_TOPIC_NUM = "metrics.messaging.topic.num";
@@ -1119,7 +1120,7 @@ public final class Constants {
 
     public static final String SERVICE_DESCRIPTION = "Service to run ad-hoc queries.";
     public static final String HTTP_TIMEOUT = "explore.http.timeout";
-
+    
     public static final String HIVE_SERVER_JDBC_URL = "hive.server2.jdbc.url";
     public static final String HIVE_METASTORE_TOKEN_SIG = "hive.metastore.token.signature";
     public static final String HIVE_METASTORE_TOKEN_SERVICE_NAME = "hive.metastore.service";

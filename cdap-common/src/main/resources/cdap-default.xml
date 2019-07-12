@@ -1049,7 +1049,7 @@
 
   <property>
     <name>dataset.service.exec.threads</name>
-    <value>10</value>
+    <value>30</value>
     <description>
       Number of Netty service executor threads for the dataset service
     </description>
@@ -2865,6 +2865,14 @@
   <!-- Router Configuration -->
 
   <property>
+    <name>router.audit.log.enabled</name>
+    <value>${security.enabled}</value>
+    <description>
+      Determine if access audit log is enabled
+    </description>
+  </property>
+  
+  <property>
     <name>router.audit.path.check.enabled</name>
     <value>true</value>
     <description>
@@ -2885,22 +2893,6 @@
     <value>11015</value>
     <description>
       CDAP Router service bind port
-    </description>
-  </property>
-
-  <property>
-    <name>router.client.boss.threads</name>
-    <value>1</value>
-    <description>
-      The number of boss threads in the CDAP Router service client
-    </description>
-  </property>
-
-  <property>
-    <name>router.client.worker.threads</name>
-    <value>10</value>
-    <description>
-      The number of worker threads in the CDAP Router service client
     </description>
   </property>
 
