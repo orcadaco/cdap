@@ -1,5 +1,5 @@
 /*
- * Copyright © 2014-2016 Cask Data, Inc.
+ * Copyright © 2014-2018 Cask Data, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -372,6 +372,132 @@ public class SchemaTest {
       Assert.assertEquals(schemaString, restoredSchema.toString());
     }
   }
+
+  /**
+   * Parent class for testing recursive schema.
+   */
+  private static final class NodeParent {
+    private List<NodeChild> children;
+  }
+
+  /**
+   * Child class for testing recursive schema.
+   */
+  private static final class NodeChild {
+    private int data;
+    private NodeParent parent;
+  }
+
+  @SuppressWarnings("ConstantConditions")
+  @Test
+  public void testGeneratorRecursion() throws Exception {
+    // This test the schema generator be able to handle recursive schema between multiple classes
+    Schema generatedSchema = new ReflectionSchemaGenerator(false).generate(NodeParent.class);
+
+    // Validate the NodeChild.parent schema is the same as the schema of the Parent class
+    // The schema generator always generate array value as nullable union
+    Schema childSchema = generatedSchema.getField("children").getSchema().getComponentSchema().getNonNullable();
+    Assert.assertEquals(generatedSchema, childSchema.getField("parent").getSchema());
+
+    // Serialize the schema and then parse it back
+    Schema deserializedSchema = Schema.parseJson(generatedSchema.toString());
+    Assert.assertEquals(generatedSchema, deserializedSchema);
+  }
+
+  @SuppressWarnings("ConstantConditions")
+  @Test
+  public void testRecursion() throws Exception {
+    // Test simple recursion
+    Schema nodeSchema = Schema.recordOf("Node",
+                                        Schema.Field.of("data", Schema.of(Schema.Type.INT)),
+                                        Schema.Field.of("next", Schema.recordOf("Node")));
+    Assert.assertEquals(nodeSchema, nodeSchema.getField("next").getSchema());
+
+    // Serialize and deserialize and validate
+    Assert.assertEquals(nodeSchema, Schema.parseJson(nodeSchema.toString()));
+    Assert.assertEquals(nodeSchema, Schema.parseJson(nodeSchema.toString()).getField("next").getSchema());
+
+    // Test multi-levels recursion. It has the following structure:
+    // Parent {
+    //   List<Child> children
+    // }
+    // Child {
+    //   GrandChild child
+    // }
+    // GrandChild {
+    //   Child parent
+    //   Parent grandParent
+    // }
+
+    Schema parentSchema = Schema.recordOf(
+      "Parent", Schema.Field.of("children", Schema.arrayOf(Schema.recordOf(
+        "Child", Schema.Field.of("children", Schema.mapOf(Schema.of(Schema.Type.STRING), Schema.recordOf(
+          "GrandChild", Schema.Field.of("parent", Schema.recordOf("Child")),
+          Schema.Field.of("grandParent", Schema.recordOf("Parent"))
+        )))))));
+
+    Schema childSchema = parentSchema.getField("children").getSchema().getComponentSchema();
+    Schema grandChildSchema = childSchema.getField("children").getSchema().getMapSchema().getValue();
+    Assert.assertEquals(parentSchema, grandChildSchema.getField("grandParent").getSchema());
+    Assert.assertEquals(childSchema, grandChildSchema.getField("parent").getSchema());
+
+    // Serialize and deserialize it back and validate again
+    parentSchema = Schema.parseJson(parentSchema.toString());
+    Assert.assertEquals(parentSchema, grandChildSchema.getField("grandParent").getSchema());
+    Assert.assertEquals(childSchema, grandChildSchema.getField("parent").getSchema());
+  }
+
+  @SuppressWarnings("ConstantConditions")
+  @Test
+  public void testUnionRecordReference() throws Exception {
+    // Test records defined earlier in an union can be referred by name in schema defined later in the union.
+    Schema first = Schema.recordOf("First", Schema.Field.of("data", Schema.of(Schema.Type.INT)));
+    Schema second = Schema.recordOf("Second", Schema.Field.of("firsts", Schema.arrayOf(Schema.recordOf("First"))));
+
+    Schema union = Schema.unionOf(first, second);
+
+    // Validate the schema are resolved
+    Assert.assertEquals(first, union.getUnionSchemas().get(1).getField("firsts").getSchema().getComponentSchema());
+
+    // Serialize and deserialize it back and validate again
+    union = Schema.parseJson(union.toString());
+    Assert.assertEquals(first, union.getUnionSchemas().get(1).getField("firsts").getSchema().getComponentSchema());
+  }
+
+  @Test
+  public void testLogicalTypes() throws Exception {
+    Schema dateType = Schema.nullableOf(Schema.of(Schema.LogicalType.DATE));
+    Schema timeMicrosType = Schema.nullableOf(Schema.of(Schema.LogicalType.TIME_MICROS));
+    Schema timeMillisType = Schema.nullableOf(Schema.of(Schema.LogicalType.TIME_MILLIS));
+    Schema timestampMicrosType = Schema.nullableOf(Schema.of(Schema.LogicalType.TIMESTAMP_MICROS));
+    Schema timestampMillisType = Schema.nullableOf(Schema.of(Schema.LogicalType.TIMESTAMP_MILLIS));
+
+    Assert.assertEquals(dateType, Schema.parseJson(dateType.toString()));
+    Assert.assertEquals(timeMicrosType, Schema.parseJson(timeMicrosType.toString()));
+    Assert.assertEquals(timeMillisType, Schema.parseJson(timeMillisType.toString()));
+    Assert.assertEquals(timestampMicrosType, Schema.parseJson(timestampMicrosType.toString()));
+    Assert.assertEquals(timestampMillisType, Schema.parseJson(timestampMillisType.toString()));
+
+    Schema complexSchema = Schema.recordOf(
+      "union",
+      Schema.Field.of("a", Schema.unionOf(Schema.of(Schema.Type.NULL),
+                                          Schema.arrayOf(Schema.of(Schema.Type.STRING)))),
+      Schema.Field.of("b", Schema.unionOf(Schema.of(Schema.Type.NULL),
+                                          Schema.arrayOf(Schema.of(Schema.LogicalType.DATE)))),
+      Schema.Field.of("c", Schema.unionOf(Schema.of(Schema.Type.NULL),
+                                          Schema.enumWith("something"))),
+      Schema.Field.of("d", Schema.unionOf(Schema.of(Schema.Type.NULL),
+                                          Schema.mapOf(Schema.of(Schema.Type.STRING), Schema.of(Schema.Type.STRING)))),
+      Schema.Field.of("e", Schema.unionOf(Schema.of(Schema.Type.NULL),
+                                          Schema.mapOf(Schema.of(Schema.LogicalType.DATE),
+                                                       Schema.of(Schema.LogicalType.TIMESTAMP_MILLIS)))),
+      Schema.Field.of("f", Schema.nullableOf(Schema.of(Schema.Type.STRING))),
+      Schema.Field.of("g", Schema.nullableOf(Schema.of(Schema.LogicalType.DATE))),
+      Schema.Field.of("h", Schema.nullableOf(Schema.of(Schema.LogicalType.TIMESTAMP_MILLIS))));
+
+    Assert.assertEquals(complexSchema, Schema.parseJson(complexSchema.toString()));
+  }
+
 
   private void verifyThrowsException(String toParse) {
     try {
