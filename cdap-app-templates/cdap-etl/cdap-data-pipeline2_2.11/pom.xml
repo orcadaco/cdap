@@ -44,6 +44,12 @@
           <groupId>co.cask.cdap</groupId>
           <artifactId>hydrator-spark-core</artifactId>
         </exclusion>
+        <exclusion>
+          <!-- CDAP-12742: avoid packaging commons-lang3, which is a dependency of cdap-formats (from grok),
+                           but clashes with the one from Spark -->
+          <groupId>org.apache.commons</groupId>
+          <artifactId>commons-lang3</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -77,6 +83,14 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-core_2.11</artifactId>
       <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <!-- CDAP-12742: avoid packaging commons-lang3, which is a dependency of cdap-formats (from grok),
+                           but clashes with the one from Spark -->
+          <groupId>org.apache.commons</groupId>
+          <artifactId>commons-lang3</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
@@ -168,7 +182,8 @@
               <goal>copy-resources</goal>
             </goals>
             <configuration>
-              <outputDirectory>${project.build.directory}/generated-sources/cdap-data-pipeline/src/main</outputDirectory>
+              <outputDirectory>${project.build.directory}/generated-sources/cdap-data-pipeline/src/main
+              </outputDirectory>
               <resources>
                 <resource>
                   <directory>${project.parent.basedir}/cdap-data-pipeline/src/main</directory>
@@ -183,7 +198,8 @@
               <goal>copy-resources</goal>
             </goals>
             <configuration>
-              <outputDirectory>${project.build.directory}/generated-test-sources/cdap-data-pipeline/src/test</outputDirectory>
+              <outputDirectory>${project.build.directory}/generated-test-sources/cdap-data-pipeline/src/test
+              </outputDirectory>
               <resources>
                 <resource>
                   <directory>${project.parent.basedir}/cdap-data-pipeline/src/test</directory>
@@ -279,7 +295,8 @@
                   <skip>false</skip>
                   <target>
                     <mkdir dir="${project.build.directory}/generated-sources/cdap-data-pipeline/src"/>
-                    <symlink link="${project.build.directory}/generated-sources/cdap-data-pipeline/src/main" resource="${cdap.data.pipeline.base.dir}/src/main" overwrite="true" />
+                    <symlink link="${project.build.directory}/generated-sources/cdap-data-pipeline/src/main"
+                             resource="${cdap.data.pipeline.base.dir}/src/main" overwrite="true"/>
                   </target>
                 </configuration>
               </execution>
@@ -293,7 +310,8 @@
                   <skip>false</skip>
                   <target>
                     <mkdir dir="${project.build.directory}/generated-test-sources/cdap-data-pipeline/src"/>
-                    <symlink link="${project.build.directory}/generated-test-sources/cdap-data-pipeline/src/test" resource="${cdap.data.pipeline.base.dir}/src/test" overwrite="true" />
+                    <symlink link="${project.build.directory}/generated-test-sources/cdap-data-pipeline/src/test"
+                             resource="${cdap.data.pipeline.base.dir}/src/test" overwrite="true"/>
                   </target>
                 </configuration>
               </execution>

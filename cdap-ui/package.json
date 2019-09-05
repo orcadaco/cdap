@@ -4,7 +4,7 @@
   "description": "Front-end for CDAP",
   "scripts": {
     "start": "node ./server.js",
-    "cdap-prod-build": "NODE_ENV=production webpack",
+    "cdap-prod-build": "NODE_ENV=production;webpack",
     "cdap-dev-build": "NODE_ENV=development webpack --config=webpack.config.js -d",
     "cdap-dev-build-w": "NODE_ENV=development webpack --watch -d ",
     "cdap-full-build": "NODE_ENV=production webpack && node ./node_modules/gulp/bin/gulp.js distribute",
@@ -33,7 +33,7 @@
     "babel-preset-env": "2.0.0-alpha.20",
     "babel-preset-react": "7.0.0-alpha.20",
     "babel-preset-stage-2": "6.24.1",
-    "bower": "1.7.2",
+    "bower": "1.8.2",
     "browser-sync": "2.18.8",
     "case-sensitive-paths-webpack-plugin": "2.1.1",
     "concurrently": "3.1.0",
