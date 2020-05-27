@@ -17,6 +17,8 @@
 package co.cask.cdap.internal.app.runtime.schedule.queue;
 
 import co.cask.cdap.api.common.Bytes;
+import co.cask.cdap.api.dataset.DatasetManagementException;
+import co.cask.cdap.api.dataset.DatasetProperties;
 import co.cask.cdap.api.dataset.lib.AbstractCloseableIterator;
 import co.cask.cdap.api.dataset.lib.AbstractDataset;
 import co.cask.cdap.api.dataset.lib.CloseableIterator;
@@ -26,11 +28,13 @@ import co.cask.cdap.api.dataset.table.Row;
 import co.cask.cdap.api.dataset.table.Scanner;
 import co.cask.cdap.api.dataset.table.Table;
 import co.cask.cdap.api.schedule.Trigger;
+import co.cask.cdap.data2.dataset2.DatasetFramework;
 import co.cask.cdap.internal.app.runtime.messaging.TopicMessageIdStore;
 import co.cask.cdap.internal.app.runtime.schedule.ProgramSchedule;
 import co.cask.cdap.internal.app.runtime.schedule.ProgramScheduleRecord;
 import co.cask.cdap.internal.app.runtime.schedule.ProgramScheduleStatus;
 import co.cask.cdap.internal.app.runtime.schedule.constraint.ConstraintCodec;
+import co.cask.cdap.internal.app.runtime.schedule.store.Schedulers;
 import co.cask.cdap.internal.app.runtime.schedule.trigger.AbstractCompositeTrigger;
 import co.cask.cdap.internal.app.runtime.schedule.trigger.SatisfiableTrigger;
 import co.cask.cdap.internal.app.runtime.schedule.trigger.TriggerCodec;
@@ -45,6 +49,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.tephra.Transaction;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -337,5 +342,17 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
 
   private byte[] getRowKey(String topic) {
     return Bytes.concat(MESSAGE_ID_ROW_PREFIX, ROW_KEY_SEPARATOR, Bytes.toBytes(topic));
+  }
+
+
+  /**
+   * Adds datasets and types to the given {@link DatasetFramework}. Used by the upgrade tool to upgrade Datasets
+   *
+   * @param datasetFramework framework to add types and datasets to
+   */
+  public static void setupDatasets(DatasetFramework datasetFramework) throws IOException,
+          DatasetManagementException {
+    datasetFramework.addInstance(JobQueueDataset.class.getName(), Schedulers.JOB_QUEUE_DATASET_ID,
+            DatasetProperties.EMPTY);
   }
 }
