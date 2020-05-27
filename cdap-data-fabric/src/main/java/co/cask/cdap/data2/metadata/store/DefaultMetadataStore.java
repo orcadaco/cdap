@@ -82,6 +82,9 @@ public class DefaultMetadataStore implements MetadataStore {
   private static final DatasetId BUSINESS_METADATA_INSTANCE_ID = NamespaceId.SYSTEM.dataset("business.metadata");
   private static final DatasetId SYSTEM_METADATA_INSTANCE_ID = NamespaceId.SYSTEM.dataset("system.metadata");
 
+  private static final DatasetId V2_BUSINESS_METADATA_INSTANCE_ID = NamespaceId.SYSTEM.dataset("v2.business");
+  private static final DatasetId V2_SYSTEM_METADATA_INSTANCE_ID = NamespaceId.SYSTEM.dataset("v2.system");
+
   //Special tag in the Metadata Dataset to mark Upgrade Status
   private static final String NEEDS_UPGRADE_TAG = "cdap.metadatadataset.needs_upgrade";
   private static final String VERSION_TAG_PREFIX = "cdap.version:";
@@ -695,6 +698,17 @@ public class DefaultMetadataStore implements MetadataStore {
   public static void setupDatasets(DatasetFramework framework) throws IOException, DatasetManagementException {
     framework.addInstance(MetadataDataset.class.getName(), BUSINESS_METADATA_INSTANCE_ID, DatasetProperties.EMPTY);
     framework.addInstance(MetadataDataset.class.getName(), SYSTEM_METADATA_INSTANCE_ID, DatasetProperties.EMPTY);
+  }
+
+  /**
+   * Adds V2 datasets and types to the given {@link DatasetFramework}. Used by the upgrade tool to upgrade Metadata
+   * Datasets.
+   *
+   * @param framework Dataset framework to add types and datasets to
+   */
+  public static void setupV2Datasets(DatasetFramework framework) throws IOException, DatasetManagementException {
+    framework.addInstance(MetadataDataset.class.getName(), V2_BUSINESS_METADATA_INSTANCE_ID, DatasetProperties.EMPTY);
+    framework.addInstance(MetadataDataset.class.getName(), V2_SYSTEM_METADATA_INSTANCE_ID, DatasetProperties.EMPTY);
   }
 
   @Override
