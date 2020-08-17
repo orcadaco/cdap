@@ -69,36 +69,38 @@ public final class StreamFileJanitor {
   public void cleanAll() throws Exception {
     List<NamespaceMeta> namespaces = namespaceQueryAdmin.list();
     for (final NamespaceMeta namespace : namespaces) {
-      final NamespaceId namespaceId = namespace.getNamespaceId();
-      final Location streamBaseLocation = impersonator.doAs(namespaceId, new Callable<Location>() {
-        @Override
-        public Location call() throws Exception {
-          return namespacedLocationFactory.get(namespaceId).append(streamBaseDirPath);
+      if (!namespace.getName().equals("default")) {
+        final NamespaceId namespaceId = namespace.getNamespaceId();
+        final Location streamBaseLocation = impersonator.doAs(namespaceId, new Callable<Location>() {
+          @Override
+          public Location call() throws Exception {
+            return namespacedLocationFactory.get(namespaceId).append(streamBaseDirPath);
+          }
+        });
+
+        boolean exists = streamBaseLocation.exists();
+        if (exists) {
+          // Remove everything under the deleted directory
+          Location deletedLocation = StreamUtils.getDeletedLocation(streamBaseLocation);
+          if (deletedLocation.exists()) {
+            Locations.deleteContent(deletedLocation);
+          }
         }
-      });
 
-      boolean exists = streamBaseLocation.exists();
-      if (exists) {
-        // Remove everything under the deleted directory
-        Location deletedLocation = StreamUtils.getDeletedLocation(streamBaseLocation);
-        if (deletedLocation.exists()) {
-          Locations.deleteContent(deletedLocation);
+        if (!exists) {
+          continue;
         }
-      }
 
-      if (!exists) {
-        continue;
-      }
+        Iterable<Location> streamLocations = StreamUtils.listAllStreams(streamBaseLocation);
 
-      Iterable<Location> streamLocations = StreamUtils.listAllStreams(streamBaseLocation);
-
-      for (final Location streamLocation : streamLocations) {
-        final StreamId streamId = namespaceId.stream(StreamUtils.getStreamNameFromLocation(streamLocation));
-        final AtomicLong ttl = new AtomicLong(0);
-        if (isStreamExists(streamId)) {
-          ttl.set(streamAdmin.getConfig(streamId).getTTL());
+        for (final Location streamLocation : streamLocations) {
+          final StreamId streamId = namespaceId.stream(StreamUtils.getStreamNameFromLocation(streamLocation));
+          final AtomicLong ttl = new AtomicLong(0);
+          if (isStreamExists(streamId)) {
+            ttl.set(streamAdmin.getConfig(streamId).getTTL());
+          }
+          clean(streamLocation, ttl.get(), System.currentTimeMillis());
         }
-        clean(streamLocation, ttl.get(), System.currentTimeMillis());
       }
     }
   }
