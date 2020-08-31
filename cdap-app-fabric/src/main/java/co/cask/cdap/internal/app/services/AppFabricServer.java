@@ -267,7 +267,6 @@ public class AppFabricServer extends AbstractIdleService {
     }, Threads.SAME_THREAD_EXECUTOR);
 
     httpService.startAndWait();
-    defaultNamespaceEnsurer.startAndWait();
     if (appVersionUpgradeService != null) {
       appVersionUpgradeService.startAndWait();
     }
@@ -277,7 +276,6 @@ public class AppFabricServer extends AbstractIdleService {
   protected void shutDown() throws Exception {
     coreSchedulerService.stopAndWait();
     routeStore.close();
-    defaultNamespaceEnsurer.stopAndWait();
     httpService.stopAndWait();
     programRuntimeService.stopAndWait();
     applicationLifecycleService.stopAndWait();
