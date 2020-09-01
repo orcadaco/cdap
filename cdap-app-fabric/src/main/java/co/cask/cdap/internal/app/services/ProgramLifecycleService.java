@@ -236,7 +236,9 @@ public class ProgramLifecycleService extends AbstractIdleService {
    */
   public synchronized ProgramController start(ProgramId programId, Map<String, String> overrides, boolean debug)
     throws Exception {
+    LOG.info("ProgramLifecycle: ProgramController start - before authorization enforcer");
     authorizationEnforcer.enforce(programId, authenticationContext.getPrincipal(), Action.EXECUTE);
+    LOG.info("ProgramLifecycle: ProgramController start - after authorization enforcer");
     if (isConcurrentRunsInSameAppForbidden(programId.getType()) && isRunningInSameProgram(programId)) {
       throw new ConflictException(String.format("Program %s is already running in an version of the same application",
                                                 programId));
@@ -245,12 +247,14 @@ public class ProgramLifecycleService extends AbstractIdleService {
       throw new ConflictException(String.format("Program %s is already running", programId));
     }
 
+    LOG.info("ProgramLifecycle: ProgramController get system and user properties for the program");
     Map<String, String> sysArgs = propertiesResolver.getSystemProperties(programId.toId());
     Map<String, String> userArgs = propertiesResolver.getUserProperties(programId.toId());
     if (overrides != null) {
       userArgs.putAll(overrides);
     }
 
+    LOG.info("ProgramLifecycle: ProgramController startInternal");
     ProgramRuntimeService.RuntimeInfo runtimeInfo = startInternal(programId, sysArgs, userArgs, debug);
     if (runtimeInfo == null) {
       throw new IOException(String.format("Failed to start program %s", programId));
@@ -284,6 +288,7 @@ public class ProgramLifecycleService extends AbstractIdleService {
     ProgramDescriptor programDescriptor = store.loadProgram(programId);
     BasicArguments systemArguments = new BasicArguments(systemArgs);
     BasicArguments userArguments = new BasicArguments(userArgs);
+    LOG.info("ProgramLifecycle: RuntimeService run {}", programId.getProgram());
     ProgramRuntimeService.RuntimeInfo runtimeInfo = runtimeService.run(programDescriptor, new SimpleProgramOptions(
       programId, systemArguments, userArguments, debug));
     
