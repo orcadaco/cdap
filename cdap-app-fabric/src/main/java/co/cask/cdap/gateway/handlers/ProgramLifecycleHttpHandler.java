@@ -385,7 +385,9 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
     // we have already validated that the action is valid
     switch (action.toLowerCase()) {
       case "start":
+        LOG.info("ProgramLifecycle: doPerformAction start");
         lifecycleService.start(program, args, false);
+        LOG.info("ProgramLifecycle: doPerformAction start lifecycleService.start ended");
         break;
       case "debug":
         if (!isDebugAllowed(programType)) {

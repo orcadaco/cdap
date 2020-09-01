@@ -107,17 +107,23 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
     ProgramId programId = programDescriptor.getProgramId();
     RunId runId = RunIds.generate();
 
+    LOG.info("ProgramLifecycle: RuntimeService program {} with runId", programId.getProgram(), runId.getId());
     // Publish the program's starting state. We don't know the Twill RunId yet, hence always passing in null.
     programStateWriter.start(programId.run(runId), options, null);
 
+    LOG.info("ProgramLifecycle: ProgramStateWriter started program {} with runId", programId.getProgram(), runId.getId());
     ProgramRunner runner = programRunnerFactory.create(programId.getType());
+    LOG.info("ProgramLifecycle: ProgramRunner created program {} with runId", programId.getProgram(), runId.getId());
     File tempDir = createTempDirectory(programId, runId);
+    LOG.info("ProgramLifecycle: TempDir created program {} with runId and path {}", programId.getProgram(), runId.getId(), tempDir.getAbsolutePath());
     Runnable cleanUpTask = createCleanupTask(tempDir, runner);
+    LOG.info("ProgramLifecycle: cleanUpTask created program {} with runId", programId.getProgram(), runId.getId());
     try {
       // Get the artifact details and save it into the program options.
       ArtifactId artifactId = programDescriptor.getArtifactId();
       ArtifactDetail artifactDetail = getArtifactDetail(artifactId);
       ProgramOptions runtimeProgramOptions = updateProgramOptions(programId, options, runId);
+      LOG.info("ProgramLifecycle: runtimeProgramOptions updated program {} with runId", programId.getProgram(), runId.getId());
 
       // Take a snapshot of all the plugin artifacts used by the program
       ProgramOptions optionsWithPlugins = createPluginSnapshot(runtimeProgramOptions, programId, tempDir,
@@ -125,11 +131,13 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
 
       // Create and run the program
       Program executableProgram = createProgram(cConf, runner, programDescriptor, artifactDetail, tempDir);
+      LOG.info("ProgramLifecycle: executableProgram created program {} with runId", programId.getProgram(), runId.getId());
       cleanUpTask = createCleanupTask(cleanUpTask, executableProgram);
 
 
       RuntimeInfo runtimeInfo = createRuntimeInfo(runner.run(executableProgram, optionsWithPlugins), programId,
                                                   cleanUpTask);
+      LOG.info("ProgramLifecycle: runtimeInfo created program {} with runId", programId.getProgram(), runId.getId());
       monitorProgram(runtimeInfo, cleanUpTask);
       return runtimeInfo;
     } catch (Exception e) {
@@ -153,7 +161,6 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
                                   ArtifactDetail artifactDetail, final File tempDir) throws IOException {
 
     final Location programJarLocation = artifactDetail.getDescriptor().getLocation();
-
     // Take a snapshot of the JAR file to avoid program mutation
     final File unpackedDir = new File(tempDir, "unpacked");
     unpackedDir.mkdirs();
@@ -161,6 +168,7 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
       File programJar = Locations.linkOrCopy(programJarLocation, new File(tempDir, "program.jar"));
       // Unpack the JAR file
       BundleJarUtil.unJar(Files.newInputStreamSupplier(programJar), unpackedDir);
+      LOG.info("ProgramLifecycle: createProgram JAR unpacked");
     } catch (IOException ioe) {
       throw ioe;
     } catch (Exception e) {
