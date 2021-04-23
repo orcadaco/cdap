@@ -276,6 +276,9 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
         if (row == null) {
           return endOfData();
         }
+        if (checkRow(row) == false) {
+          return endOfData();
+        }
         return fromRow(row);
       }
 
@@ -286,6 +289,60 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
     };
   }
 
+  private Boolean checkRow(Row row) {
+    LOG.info("Check row: " + row);
+    if (row == null) {
+      LOG.info("Row is null");
+      return false;
+    }
+
+    if (row.get(COL) == null) {
+      LOG.info("Column C for row is null");
+      return false;
+    }
+
+    String jobJsonString = Bytes.toString(row.get(COL));
+    if (jobJsonString == null) {
+      LOG.info("jobJsonString is null");
+      return false;
+    }
+
+    LOG.info("jobJsonString " + jobJsonString);
+
+    try {
+      SimpleJob job = GSON.fromJson(jobJsonString, SimpleJob.class);
+      if (job == null) {
+        LOG.info("job is null");
+        return false;
+      }
+    }
+    catch (Exception e) {
+      LOG.info("Can't create JSON from String");
+      LOG.error(e.toString());
+      return false;
+    }
+
+    if (row.getLong(TO_DELETE_COL) == null) {
+      LOG.info("TO_DELETE_COL is null");
+      return false;
+    }
+
+    Long toBeDeletedTime = row.getLong(TO_DELETE_COL);
+    Long isObsoleteTime = row.getLong(IS_OBSOLETE_COL);
+
+    LOG.info("toBeDeletedTime " + toBeDeletedTime.toString());
+    LOG.info("isObsoleteTime " + isObsoleteTime.toString());
+
+    Long timeToSet = toBeDeletedTime == null ? isObsoleteTime :
+            isObsoleteTime == null ? toBeDeletedTime : new Long(Math.min(isObsoleteTime, toBeDeletedTime));
+
+    if (timeToSet == null) {
+      LOG.info("Time to set is null");
+    }
+
+    return true;
+  }
+
   private Job fromRow(Row row) {
     String jobJsonString = Bytes.toString(row.get(COL));
     SimpleJob job = GSON.fromJson(jobJsonString, SimpleJob.class);
@@ -294,7 +351,7 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
     Long timeToSet = toBeDeletedTime == null ? isObsoleteTime :
       isObsoleteTime == null ? toBeDeletedTime : new Long(Math.min(isObsoleteTime, toBeDeletedTime));
     if (timeToSet != null) {
-      LOG.trace("Job setToBeDeleted {} at time {}", jobJsonString, timeToSet);
+      LOG.info("Job setToBeDeleted {} at time {}", jobJsonString, timeToSet);
       job.setToBeDeleted(timeToSet);
     }
     return job;
