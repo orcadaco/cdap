@@ -290,7 +290,7 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
   }
 
   private Boolean checkRow(Row row) {
-    LOG.info("Check row: " + row);
+//    LOG.info("Check row: " + row);
     if (row == null) {
       LOG.info("Row is null");
       return false;
@@ -322,16 +322,10 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
       return false;
     }
 
-    if (row.getLong(TO_DELETE_COL) == null) {
-      LOG.info("TO_DELETE_COL is null");
-      return false;
-    }
-
     Long toBeDeletedTime = row.getLong(TO_DELETE_COL);
     Long isObsoleteTime = row.getLong(IS_OBSOLETE_COL);
 
-    LOG.info("toBeDeletedTime " + toBeDeletedTime.toString());
-    LOG.info("isObsoleteTime " + isObsoleteTime.toString());
+    LOG.info("toBeDeletedTime {} isObsoleteTime {}", toBeDeletedTime, isObsoleteTime);
 
     Long timeToSet = toBeDeletedTime == null ? isObsoleteTime :
             isObsoleteTime == null ? toBeDeletedTime : new Long(Math.min(isObsoleteTime, toBeDeletedTime));
