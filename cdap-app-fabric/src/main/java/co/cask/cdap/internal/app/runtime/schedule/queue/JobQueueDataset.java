@@ -276,10 +276,16 @@ public class JobQueueDataset extends AbstractDataset implements JobQueue, TopicM
         if (row == null) {
           return endOfData();
         }
-        if (checkRow(row) == false) {
+        if (!checkRow(row)) {
           return endOfData();
         }
-        return fromRow(row);
+        try {
+          return fromRow(row);
+        }
+        catch (Exception e) {
+          LOG.error("Exception fromRow ", e);
+          return endOfData();
+        }
       }
 
       @Override
